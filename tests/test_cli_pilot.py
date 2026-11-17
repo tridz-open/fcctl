@@ -203,3 +203,22 @@ def test_fleet_policy_denied_exit4(fake, capsys):
     prof(capsys, "read_only")
     fake.sites["a.x.com"] = {"name": "a.x.com", "status": "active", "apps": []}
     assert run(capsys, "fleet", "run", "site.migrate", "--select", "server-fake:a.x.com")[0] == 4
+
+
+def _capture_install(monkeypatch):
+    from fcctl import sites
+    calls = []
+
+    def fake_install(p, site, app=None, repo=None, branch=None):
+        calls.append((site, app, repo, branch))
+        return {"task_id": ""}
+    monkeypatch.setattr(sites, "install_app", fake_install)
+    return calls
+
+
+def test_app_add_with_site_routes_to_site_install(ready, capsys, monkeypatch):
+    """app add NAME --site S uses the site install body {app}, as the dashboard does, not bench get-app."""
+    calls = _capture_install(monkeypatch)
+    assert run(capsys, "app", "add", "india_compliance", "--site", "a.x.com", "--site", "b.x.com", *S)[0] == 0
+    assert calls == [("a.x.com", "india_compliance", None, None),
+                     ("b.x.com", "india_compliance", None, None)]

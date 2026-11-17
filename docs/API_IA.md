@@ -150,7 +150,7 @@ GAP: in-place server restore from snapshot (clone only).
 | sites.drop | fcctl site drop | DELETE /sites/<n> | bench | **G** | S |
 | sites.rename | later | POST /sites/<n>/actions/rename | bench | g | S |
 | sites.clone | fcctl site clone | POST /sites/<n>/actions/clone (keys name, target_bench) | bench | **G** | S |
-| sites.apps.list / install | fcctl app add --site | GET/POST /sites/<n>/apps | bench | | S |
+| sites.apps.list / install | fcctl app add NAME --site S; fcctl app install --site S NAME | GET/POST /sites/<n>/apps; body {app} (get-and-install-app if not on bench) or {repo, branch} | bench | | S |
 | sites.apps.uninstall | fcctl app remove --site | DELETE /sites/<n>/apps/<app> | bench | **G** | S |
 | sites.update_apps / reinstall | later | POST /sites/<n>/actions/update-apps, /reinstall | bench | reinstall: g | S |
 | sites.backups.list / get / create | fcctl backup list/create | GET /sites/<n>/backups[/<ts>]; POST /sites/<n>/backups | bench | | S |
