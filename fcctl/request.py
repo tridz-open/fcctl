@@ -90,6 +90,31 @@ def raise_for_pilot(r: httpx.Response) -> Any:
     _generic(r, f"{r.status_code} {code} {r.text[:300]}", body, code or None)
 
 
+class DryRunRecorder:
+    """While active, non-GET requests are recorded instead of sent (used by --dry-run)."""
+    MAX = 10
+    requests: list | None = None
+
+    @classmethod
+    def start(cls) -> None:
+        cls.requests = []
+
+    @classmethod
+    def stop(cls) -> list:
+        out, cls.requests = cls.requests or [], None
+        return out
+
+    @classmethod
+    def record(cls, method: str, path: str, params: Any, body: Any) -> bool:
+        """True when the request was recorded (and must not be sent)."""
+        if cls.requests is None or method.upper() == "GET":
+            return False
+        if len(cls.requests) >= cls.MAX:
+            raise RuntimeError("dry-run: too many requests recorded")
+        cls.requests.append({"method": method.upper(), "path": path, "params": params, "body": body})
+        return True
+
+
 class CentralClient:
     """Central v2: {base}/api/v2/method/<dotted>; cookie sid + X-Frappe-CSRF-Token.
 

@@ -237,3 +237,13 @@ def test_site_rename_cli(ready, capsys, monkeypatch):
     assert rc == 0 and calls == [("a.x.com", "b.x.com", False)]
     rc, _, _ = run(capsys, "site", "rename", "a.x.com", "c.x.com", "--keep-old-hostname", *S)
     assert rc == 0 and calls[-1] == ("a.x.com", "c.x.com", True)
+
+
+def test_site_rename_dry_run_prints_request(ready, capsys):
+    rc, out, _ = run(capsys, "site", "rename", "a.x.com", "b.x.com", "--dry-run", *S)
+    d = json.loads(out)
+    assert rc == 0 and d["dry_run"] and d["op"] == "site.rename" and d["decision"]
+    assert d["request"]["method"] == "POST" and d["request"]["path"] == "/sites/a.x.com/actions/rename"
+    assert d["request"]["body"] == {"new_name": "b.x.com", "keep_old_hostname": False}
+    assert d["requests"] == [d["request"]]
+    assert "a.x.com" in ready.sites and "b.x.com" not in ready.sites

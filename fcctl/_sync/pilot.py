@@ -8,7 +8,7 @@ from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 
-from ..request import AuthError, raise_for_pilot
+from ..request import AuthError, DryRunRecorder, raise_for_pilot
 from . import _io
 from .central import CentralClient
 from .transport import UA, make_http
@@ -72,6 +72,8 @@ class PilotClient:
 
     def request(self, method: str, path: str, params: dict | None = None, json: Any = None,
                       idempotency_key: str | None = None, raw: bool = False, _retried: bool = False) -> Any:
+        if DryRunRecorder.record(method, path, params, json):
+            return {}
         s = self.session()
         headers = {"Accept": "application/json", "Authorization": f"Bearer {s['token']}"}
         if idempotency_key:

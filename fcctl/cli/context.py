@@ -140,7 +140,7 @@ class Ctx:
             clients["pilot"] = self.pilot()
         p = self.profile
         base = dict(eff=self.eff, journal=self.journal, guard=guard, audit=self.audit, alerter=None,
-                    profile=p.name, actor=self.actor, dry_run=bool(self.args.dry_run),
+                    profile=p.name, actor=self.actor, dry_run=bool(self.args.dry_run), record_dry_run=True,
                     confirm=self.args.confirm, kind=plane, server=self.args.server, clients=clients)
         base.update(kw)
         return OpContext(**base)
