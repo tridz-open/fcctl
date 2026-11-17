@@ -19,6 +19,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from ..request import DryRunRecorder
 from ..errors import ApiError, AuthError, FcError, NotFound, redact
 from .transport import UA, make_http
 
@@ -85,6 +86,8 @@ class SiteAdminClient:
 
     # -- transport ---------------------------------------------------------
     def _req(self, method: str, path: str, params: dict | None = None, json: Any = None) -> Any:
+        if DryRunRecorder.record(method, path, params, json):
+            return httpx.Response(200, json={})  # dry-run: recorded, never sent
         headers = {"Accept": "application/json"}
         if method != "GET" and self._csrf:
             headers["X-Frappe-CSRF-Token"] = self._csrf
