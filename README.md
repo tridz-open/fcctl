@@ -243,7 +243,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). Endpoin
 
 ## Deprecated: browser fallback (will be removed)
 
-`fcctl.browser.Browser` (Playwright, `pip install fcctl[browser]`) and the `fallback` hook on `CentralClient` are deprecated and will be removed. Constructing `Browser` or using the fallback emits a `DeprecationWarning`. Default behaviour is HTTP-only: the fallback runs only if a library user wires it in explicitly. fcctl never solves challenges; the supported login is the plain HTTP path (`send_code`/`verify_code`: manual code, `--code-stdin`, or IMAP).
+`fcctl.browser.Browser` (Playwright, `pip install -e '.[browser]'` from a clone) and the `fallback` hook on `CentralClient` are deprecated and will be removed. Constructing `Browser` or using the fallback emits a `DeprecationWarning`. Default behaviour is HTTP-only: the fallback runs only if a library user wires it in explicitly. fcctl never solves challenges; the supported login is the plain HTTP path (`send_code`/`verify_code`: manual code, `--code-stdin`, or IMAP).
 
 ## License
 

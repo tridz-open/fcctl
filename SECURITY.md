@@ -4,8 +4,7 @@ fcctl is alpha software.
 
 ## Reporting a vulnerability
 
-Please report privately, not in a public issue: use GitHub's "Report a vulnerability" (private security advisory) on this repository, or email security@REPLACE-ME.example.
-<!-- OWNER: set real security contact -->
+Please report privately, not in a public issue: use GitHub's "Report a vulnerability" button (private security advisory) on this repository's Security tab.
 
 Include the version (`fcctl version`), what you did, and what you expected. We aim to acknowledge within 7 days.
 
