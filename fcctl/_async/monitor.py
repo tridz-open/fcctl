@@ -22,4 +22,5 @@ async def health(p: PilotClient):
 
 
 async def monitor_status(p: PilotClient):
+    """Monitor log sources."""
     return await p.get("/monitor/status")

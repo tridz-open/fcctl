@@ -1,0 +1,24 @@
+name: contract-refresh
+# Weekly/manual drift check: re-extract the Pilot dashboard contract and diff it against the committed fixture.
+# Needs the repo variable PILOT_ADMIN_URL (an admin dashboard URL that serves the public JS bundle).
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Extract fresh contract
+        env:
+          PILOT_ADMIN_URL: ${{ vars.PILOT_ADMIN_URL }}
+        run: |
+          test -n "$PILOT_ADMIN_URL" || { echo "set repo variable PILOT_ADMIN_URL"; exit 2; }
+          python -I scripts/extract_pilot_contract.py --fetch "$PILOT_ADMIN_URL" "$RUNNER_TEMP/assets"
+          python -I scripts/extract_pilot_contract.py "$RUNNER_TEMP/assets" > "$RUNNER_TEMP/fresh.json"
+      - name: Diff against fixture
+        run: diff -u tests/fixtures/pilot_dashboard_contract.json "$RUNNER_TEMP/fresh.json"

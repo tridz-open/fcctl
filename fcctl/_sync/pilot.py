@@ -4,14 +4,19 @@ from __future__ import annotations
 
 import uuid
 from typing import Any, Callable
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 
-from ..request import AuthError, raise_for_pilot
+from ..request import AuthError, DryRunRecorder, raise_for_pilot
 from . import _io
 from .central import CentralClient
 from .transport import UA, make_http
+
+
+def seg(value: Any) -> str:
+    """Percent-encode one URL path segment (slashes and spaces included)."""
+    return quote(str(value), safe="")
 
 
 class PilotClient:
@@ -67,6 +72,8 @@ class PilotClient:
 
     def request(self, method: str, path: str, params: dict | None = None, json: Any = None,
                       idempotency_key: str | None = None, raw: bool = False, _retried: bool = False) -> Any:
+        if DryRunRecorder.record(method, path, params, json):
+            return {}
         s = self.session()
         headers = {"Accept": "application/json", "Authorization": f"Bearer {s['token']}"}
         if idempotency_key:

@@ -50,7 +50,7 @@ REGISTRY: dict[str, dict] = {
     "site.rename": _o("write", "pilot", "POST"),
     "site.uninstall_app": _o("destructive", "pilot", "POST"), "site.drop": _o("destructive", "pilot", "DELETE"),
     # apps (pilot)
-    "app.list": _o("read", "pilot", "GET"), "app.check_updates": _o("read", "pilot", "GET"),
+    "app.list": _o("read", "pilot", "GET"), "app.check_updates": _o("write", "pilot", "POST"),
     "app.add_marketplace": _o("write", "pilot", "POST"), "app.add_repo": _o("write", "pilot", "POST"),
     "app.add_in_order": _o("write", "pilot", "POST"), "app.update": _o("write", "pilot", "POST"),
     "app.switch_branch": _o("destructive", "pilot", "POST"), "app.remove": _o("destructive", "pilot", "DELETE"),

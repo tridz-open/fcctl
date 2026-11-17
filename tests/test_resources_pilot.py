@@ -69,3 +69,85 @@ def test_ops_ids_known_to_policy():
     assert all("." in m for m in missing)
     for mod in (servers, sites, objects, apps, backups, taskops, billing, notifications, infra, domains, activity):
         assert all(callable(getattr(mod, fn)) for fn in mod.OPS)
+
+
+def test_check_updates_path(r, p):
+    fetch = ok(r, "post", "/apps/fetch", {"task_id": "t"})
+    old = ok(r, "post", "/app-update-checks", {})
+    assert apps.check_updates(p) == {"task_id": "t"}
+    assert fetch.calls[0].request.method == "POST" and not old.called
+
+
+def test_check_updates_result_parses_last_line(r, p):
+    ok(r, "get", "/tasks/t/output/content", {"content": 'x\n{"erpnext":{"has_update":true}}\n'})
+    assert apps.check_updates_result(p, "t") == {"erpnext": {"has_update": True}}
+
+
+def test_policy_check_updates_is_post():
+    assert policy.REGISTRY["app.check_updates"].get("method") == "POST"
+
+
+def test_add_repo_resolves_name(r, p):
+    res = ok(r, "post", "/git/repository-resolutions", {"name": "demo"})
+    add = ok(r, "post", "/apps", {"task_id": "t"})
+    apps.add_repo(p, "https://github.com/o/demo", "main")
+    assert json.loads(res.calls[0].request.content) == {"repo": "https://github.com/o/demo", "branch": "main"}
+    assert json.loads(add.calls[0].request.content) == {
+        "name": "demo", "repo": "https://github.com/o/demo", "branch": "main", "sites": []}
+    assert [c.request.url.path for c in r.calls] == [
+        "/api/v1/git/repository-resolutions", "/api/v1/apps"]
+
+
+def test_add_repo_name_override_skips_resolution(r, p):
+    res = ok(r, "post", "/git/repository-resolutions", {"name": "x"})
+    add = ok(r, "post", "/apps", {"task_id": "t"})
+    apps.add_repo(p, "R", "b", ["s"], name="mine")
+    assert not res.called
+    assert json.loads(add.calls[0].request.content) == {"name": "mine", "repo": "R", "branch": "b", "sites": ["s"]}
+
+
+def test_add_repo_resolution_error(r, p):
+    ok(r, "post", "/git/repository-resolutions", {"message": "no app found"})
+    add = ok(r, "post", "/apps", {})
+    with pytest.raises(Exception, match="no app found"):
+        apps.add_repo(p, "R", "main")
+    assert not add.called
+
+
+def test_add_in_order_repo_spec(r, p):
+    ok(r, "post", "/git/repository-resolutions", {"name": "demo"})
+    add = ok(r, "post", "/apps", {})
+    apps.add_in_order(p, [{"repo": "R", "branch": "main"}])
+    assert json.loads(add.calls[0].request.content) == {"name": "demo", "repo": "R", "branch": "main", "sites": []}
+
+
+def test_add_marketplace_with_sites_uses_site_install(r, p):
+    a = ok(r, "post", "/sites/a/apps", {"task_id": "t"})
+    b = ok(r, "post", "/sites/b/apps", {"task_id": "t"})
+    apps_route = ok(r, "post", "/apps", {})
+    apps.add_marketplace(p, "india_compliance", ["a", "b"])
+    assert json.loads(a.calls[0].request.content) == {"app": "india_compliance"}
+    assert json.loads(b.calls[0].request.content) == {"app": "india_compliance"}
+    assert not apps_route.called
+
+
+def test_add_marketplace_bench_only_resolves_registry(r, p):
+    ok(r, "get", "/marketplace/apps", [{"name": "x", "repo": "https://github.com/o/x", "branch": "version-16", "is_installable": True}])
+    add = ok(r, "post", "/apps", {"task_id": "t"})
+    apps.add_marketplace(p, "x")
+    assert json.loads(add.calls[0].request.content) == {"name": "x", "repo": "https://github.com/o/x", "branch": "version-16", "sites": []}
+
+
+def test_add_marketplace_unknown_app_raises(r, p):
+    from fcctl.errors import UsageError
+    ok(r, "get", "/marketplace/apps", [])
+    add = ok(r, "post", "/apps", {})
+    with pytest.raises(UsageError):
+        apps.add_marketplace(p, "nope")
+    assert not add.called
+
+
+def test_rename_site_body(r, p):
+    route = ok(r, "post", "/sites/s/actions/rename", {"task_id": "t"})
+    sites.rename_site(p, "s", "n.example")
+    assert json.loads(route.calls.last.request.content) == {"new_name": "n.example", "keep_old_hostname": False}

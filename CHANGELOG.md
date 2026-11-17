@@ -2,6 +2,24 @@
 
 All notable changes to this project are documented here. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- Pilot contract guard: `tests/test_pilot_contract.py` checks every public Pilot call (method, path, body and query keys) against the dashboard API extracted by `scripts/extract_pilot_contract.py` (`just contract-refresh`, weekly `contract-refresh` workflow diffs it), plus a fake-conformance check; `DELETE /apps/{}` (`remove_app`) is allowlisted as unverified (P8).
+- `--dry-run` now also prints the request that would be sent (`request`: method, path, params, body; `requests` lists all, max 10) for write ops; existing keys are unchanged and nothing is written.
+- `fcctl app add NAME --site S` (repeatable) fetches and installs NAME on each site via `POST /sites/{site}/apps {"app": NAME}`, the same call the dashboard makes. When the app isn't on the bench yet, Pilot runs `get-and-install-app`, which avoids the bench `get-app` validator that rejects apps such as india_compliance.
+
+### Fixed
+- Pilot path segments (site, app, log, task, backup timestamp) are now percent-encoded via `pilot.seg`, so names with `/` or spaces cannot alter the route; URL-safe names are unchanged. `monitor_status` docstring now reads "monitor log sources".
+- `provision` preflight `running_tasks` now lists `/tasks` without a status filter and keeps `queued` and `running` tasks (queued tasks were missed; `pending` is not a Pilot status).
+- `backups.set_schedule` always sends `retention`: when none is given it reads the current schedule first and echoes its retention, so a PUT can no longer reset it.
+- `sites.rename_site` now posts `{"new_name", "keep_old_hostname"}` (Pilot reads `new_name`; the old `name`/`make_primary` body was ignored); `make_primary` is dropped. New CLI `fcctl site rename SITE NEW [--keep-old-hostname]` (guarded write, op `site.rename`).
+- `logs.content` with `lines` now tails via `GET /logs/{f}?lines=N` (joined with newlines) instead of silently downloading the whole file; without `lines` it still downloads `/content`.
+- `transfer` now reads `size_bytes` (legacy `size` still accepted) and classifies parts by `kind` (`database`, `public-file`, `private-file`) with a filename fallback, fixing KeyError in cross-server restore and `provision --from-backup`. The fake backup listing uses the live shape.
+- `apps.add_marketplace` with `sites` now installs per site (`POST /sites/{site}/apps {"app"}`) and never posts `/apps`; without sites it resolves `GET /marketplace/apps` (UsageError if missing or not installable) and posts `{name, repo, branch, sites: []}`. `app add` help recommends `--site`.
+- `apps.add_repo` (and `add_in_order` repo specs) now resolve the app name via `POST /git/repository-resolutions` before `POST /apps`, instead of sending no name (which made the repo URL the app name and failed get-app); an explicit `name=` skips the resolution.
+- `apps.check_updates` now posts `/apps/fetch` (the old `/app-update-checks` route does not exist) and returns the task id; new `apps.check_updates_result` parses the task output, and `fcctl app check-updates` waits and prints the `{app: {...}}` map. Policy now classes it as a write (POST).
+
 ## [0.1.0a0] - 2026-11-17
 
 First public alpha.

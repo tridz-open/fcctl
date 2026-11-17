@@ -15,6 +15,7 @@ list_apps = _impl.list_apps
 add_marketplace = _impl.add_marketplace
 add_repo = _impl.add_repo
 check_updates = _impl.check_updates
+check_updates_result = _impl.check_updates_result
 update_apps = _impl.update_apps
 
 

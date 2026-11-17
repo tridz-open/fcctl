@@ -6,7 +6,7 @@ from typing import Any, Callable
 
 import httpx
 
-from ..request import AuthError, CloudflareChallenge, CsrfError, raise_for_central
+from ..request import AuthError, CloudflareChallenge, CsrfError, DryRunRecorder, raise_for_central
 from ..session_store import SessionStore
 from .transport import CENTRAL_BASE, UA, make_http
 
@@ -60,6 +60,8 @@ class CentralClient:
 
     async def call(self, method: str, dotted: str, params: dict | None = None, json: Any = None,
                    team: bool = True, _retried: bool = False) -> Any:
+        if DryRunRecorder.record(method, dotted, params, json):
+            return {}
         try:
             self.mode_used = "http"
             return await self._once(method, dotted, params, json, team)

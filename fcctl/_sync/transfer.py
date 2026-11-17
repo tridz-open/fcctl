@@ -12,9 +12,9 @@ from typing import Any, Callable
 
 import httpx
 
-from ..request import FcError, raise_for_pilot
+from ..request import DryRunRecorder, FcError, raise_for_pilot
 from . import _io
-from .pilot import PilotClient
+from .pilot import seg, PilotClient
 
 PART_SUFFIX = (("private", "-private-files.tar"), ("public", "-files.tar"), ("database", "-database.sql.gz"))
 
@@ -22,11 +22,29 @@ PART_SUFFIX = (("private", "-private-files.tar"), ("public", "-files.tar"), ("da
 class TransferError(FcError): ...
 
 
+KIND_PART = {"database": "database", "public-file": "public", "private-file": "private"}
+
+
 def classify(filename: str) -> str | None:
     for part, suffix in PART_SUFFIX:  # private before public: "-private-files.tar" also ends "-files.tar"
         if filename.endswith(suffix):
             return part
     return None
+
+
+def _size(f: dict) -> int:
+    """Live backup listings carry size_bytes; accept the legacy size key as a fallback."""
+    v = f.get("size_bytes", f.get("size"))
+    if v is None:
+        raise TransferError(f"backup file {f.get('filename')!r} has no size_bytes")
+    return int(v)
+
+
+def _part(f: dict) -> str | None:
+    kind = f.get("kind")
+    if kind in KIND_PART:
+        return KIND_PART[kind]
+    return classify(f.get("filename", ""))
 
 
 def _auth(p: PilotClient) -> tuple[dict, str]:
@@ -37,6 +55,8 @@ def _auth(p: PilotClient) -> tuple[dict, str]:
 def _call(p: PilotClient, method: str, path: str, *, retries: int = 4, backoff: float = 1.0,
           timeout: float = 120.0, headers: dict | None = None, **kw) -> httpx.Response:
     """One Pilot request with retry on 5xx/network errors and a single re-mint on 401."""
+    if DryRunRecorder.record(method, path, kw.get("params"), kw.get("json")):
+        return httpx.Response(200, json={})  # dry-run: recorded, never sent
     reminted, attempt = False, 0
     while True:
         h, gw = _auth(p)
@@ -93,11 +113,11 @@ def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup_times
     resumes. progress(bytes_done_total, bytes_total, filename) is called after each chunk.
     """
     kw = dict(retries=retries, backoff=backoff, timeout=chunk_timeout)
-    meta = raise_for_pilot(_call(src_pilot, "GET", f"/sites/{src_site}/backups/{backup_timestamp}", **kw))
+    meta = raise_for_pilot(_call(src_pilot, "GET", f"/sites/{seg(src_site)}/backups/{seg(backup_timestamp)}", **kw))
     files = (meta.get("files") if isinstance(meta, dict) else None) or []
     chosen: dict[str, dict] = {}
     for f in files:
-        part = classify(f.get("filename", ""))
+        part = _part(f)
         if part in parts:
             chosen[part] = f
     missing = [p for p in parts if p not in chosen]
@@ -106,26 +126,26 @@ def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup_times
 
     st, save = _load(state)
     if st.get("dst_site") != dst_site or st.get("timestamp") != backup_timestamp or "upload_id" not in st:
-        body = {"files": {p: {"filename": chosen[p]["filename"], "size": int(chosen[p]["size"])} for p in parts}}
-        up = raise_for_pilot(_call(dst_pilot, "POST", f"/sites/{dst_site}/uploads", json=body, **kw))
+        body = {"files": {p: {"filename": chosen[p]["filename"], "size": _size(chosen[p])} for p in parts}}
+        up = raise_for_pilot(_call(dst_pilot, "POST", f"/sites/{seg(dst_site)}/uploads", json=body, **kw))
         st.clear()
-        st.update(upload_id=up["upload_id"], dst_site=dst_site, timestamp=backup_timestamp, done={})
+        st.update(upload_id=up["upload_id"] if "upload_id" in up or not DryRunRecorder.active() else "dry-run", dst_site=dst_site, timestamp=backup_timestamp, done={})
         save()
     uid, done = st["upload_id"], st.setdefault("done", {})
 
-    total = sum(int(chosen[p]["size"]) for p in parts)
-    sent = sum(min(int(done.get(p, 0)), int(chosen[p]["size"])) for p in parts)
+    total = sum(_size(chosen[p]) for p in parts)
+    sent = sum(min(int(done.get(p, 0)), _size(chosen[p])) for p in parts)
     for part in parts:
         f = chosen[part]
-        size, fid = int(f["size"]), f["filename"]
-        src_path = f"/sites/{src_site}/backups/{backup_timestamp}/files/{fid}/content"
+        size, fid = _size(f), f["filename"]
+        src_path = f"/sites/{seg(src_site)}/backups/{seg(backup_timestamp)}/files/{seg(fid)}/content"
         off = int(done.get(part, 0))
         while off < size:
             n = min(chunk_size, size - off)
             data = _read_chunk(src_pilot, src_path, off, n, **kw)
             if len(data) != n:
                 raise TransferError(f"{fid}: short read at {off}: got {len(data)} of {n}")
-            r = _call(dst_pilot, "PUT", f"/sites/{dst_site}/uploads/{uid}/files/{part}",
+            r = _call(dst_pilot, "PUT", f"/sites/{seg(dst_site)}/uploads/{seg(uid)}/files/{seg(part)}",
                       params={"offset": off}, content=data,
                       headers={"Content-Type": "application/octet-stream"}, **kw)
             raise_for_pilot(r)
@@ -135,12 +155,14 @@ def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup_times
             save()
             if progress:
                 progress(sent, total, fid)
+            if DryRunRecorder.active():
+                break  # dry-run: one recorded chunk per part is enough
     if upload_only:
         # Uploading does not touch the target site; the overwriting restore is left to the caller
         # (e.g. the guarded backups.restore) so approval rules apply.
         return {"upload_id": uid, "parts": list(parts)}
     body = {"parts": list(parts), "upload_id": uid, "skip_failing_patches": skip_failing_patches}
-    return raise_for_pilot(_call(dst_pilot, "POST", f"/sites/{dst_site}/actions/restore",
+    return raise_for_pilot(_call(dst_pilot, "POST", f"/sites/{seg(dst_site)}/actions/restore",
                                  json=body, headers={"Idempotency-Key": f"xs-{uid}"}, **kw))
 
 
@@ -150,10 +172,10 @@ def restore_via_download_links(src_pilot: PilotClient, src_site: str, backup_tim
     """S3 path (needs offsite backup + bench s3 config; not verified live): fetch presigned links and
     ask the target to restore from them. Falls back to the streaming path when no links exist."""
     links = raise_for_pilot(_call(src_pilot, "GET",
-                                  f"/sites/{src_site}/backups/{backup_timestamp}/download-links"))
+                                  f"/sites/{seg(src_site)}/backups/{seg(backup_timestamp)}/download-links"))
     urls = links.get("links", links) if isinstance(links, dict) else {}
     if not all(p in urls for p in parts):
         raise TransferError("download-links missing parts; use restore_from_site_backup")
     body = {"parts": list(parts), "backup_urls": {p: urls[p] for p in parts},
             "skip_failing_patches": skip_failing_patches}
-    return raise_for_pilot(_call(dst_pilot, "POST", f"/sites/{dst_site}/actions/restore", json=body))
+    return raise_for_pilot(_call(dst_pilot, "POST", f"/sites/{seg(dst_site)}/actions/restore", json=body))

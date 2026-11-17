@@ -203,3 +203,47 @@ def test_fleet_policy_denied_exit4(fake, capsys):
     prof(capsys, "read_only")
     fake.sites["a.x.com"] = {"name": "a.x.com", "status": "active", "apps": []}
     assert run(capsys, "fleet", "run", "site.migrate", "--select", "server-fake:a.x.com")[0] == 4
+
+
+def _capture_install(monkeypatch):
+    from fcctl import sites
+    calls = []
+
+    def fake_install(p, site, app=None, repo=None, branch=None):
+        calls.append((site, app, repo, branch))
+        return {"task_id": ""}
+    monkeypatch.setattr(sites, "install_app", fake_install)
+    return calls
+
+
+def test_app_add_with_site_routes_to_site_install(ready, capsys, monkeypatch):
+    """app add NAME --site S uses the site install body {app}, as the dashboard does, not bench get-app."""
+    calls = _capture_install(monkeypatch)
+    assert run(capsys, "app", "add", "india_compliance", "--site", "a.x.com", "--site", "b.x.com", *S)[0] == 0
+    assert calls == [("a.x.com", "india_compliance", None, None),
+                     ("b.x.com", "india_compliance", None, None)]
+
+
+def test_app_check_updates_cli(ready, capsys):
+    rc, out, _ = run(capsys, "app", "check-updates", *S)
+    assert rc == 0 and "erpnext" in json.loads(out)
+
+
+def test_site_rename_cli(ready, capsys, monkeypatch):
+    from fcctl import sites
+    calls = []
+    monkeypatch.setattr(sites, "rename_site", lambda p, *a: calls.append(a) or {})
+    rc, _, _ = run(capsys, "site", "rename", "a.x.com", "b.x.com", *S)
+    assert rc == 0 and calls == [("a.x.com", "b.x.com", False)]
+    rc, _, _ = run(capsys, "site", "rename", "a.x.com", "c.x.com", "--keep-old-hostname", *S)
+    assert rc == 0 and calls[-1] == ("a.x.com", "c.x.com", True)
+
+
+def test_site_rename_dry_run_prints_request(ready, capsys):
+    rc, out, _ = run(capsys, "site", "rename", "a.x.com", "b.x.com", "--dry-run", *S)
+    d = json.loads(out)
+    assert rc == 0 and d["dry_run"] and d["op"] == "site.rename" and d["decision"]
+    assert d["request"]["method"] == "POST" and d["request"]["path"] == "/sites/a.x.com/actions/rename"
+    assert d["request"]["body"] == {"new_name": "b.x.com", "keep_old_hostname": False}
+    assert d["requests"] == [d["request"]]
+    assert "a.x.com" in ready.sites and "b.x.com" not in ready.sites

@@ -5,7 +5,7 @@ Every function that starts a task returns the 202 task dict; use tasks.run()/wai
 """
 from __future__ import annotations
 
-from .pilot import PilotClient
+from .pilot import seg, PilotClient
 
 
 def list_sites(p: PilotClient):
@@ -13,7 +13,7 @@ def list_sites(p: PilotClient):
 
 
 def get_site(p: PilotClient, name: str):
-    return p.get(f"/sites/{name}")
+    return p.get(f"/sites/{seg(name)}")
 
 
 def wildcard_domains(p: PilotClient):
@@ -27,54 +27,54 @@ def create_site(p: PilotClient, name: str, apps: list[str], key: str | None = No
 
 def clone_site(p: PilotClient, source: str, name: str, target_bench: str = "default-bench", key=None):
     """Golden-source clone; body keys name, target_bench."""
-    return p.post(f"/sites/{source}/actions/clone", {"name": name, "target_bench": target_bench}, key=key)
+    return p.post(f"/sites/{seg(source)}/actions/clone", {"name": name, "target_bench": target_bench}, key=key)
 
 
 def install_app(p: PilotClient, site: str, app: str | None = None, repo: str | None = None, branch: str | None = None):
     """Install an app: {app} or {repo, branch} (repo needs bench scope)."""
     body = {"app": app} if app else {"repo": repo, **({"branch": branch} if branch else {})}
-    return p.post(f"/sites/{site}/apps", body)
+    return p.post(f"/sites/{seg(site)}/apps", body)
 
 
 def uninstall_app(p: PilotClient, site: str, app: str, force: bool = False, remove_from_bench: bool = False):
-    return p.delete(f"/sites/{site}/apps/{app}", force=str(force).lower(),
+    return p.delete(f"/sites/{seg(site)}/apps/{seg(app)}", force=str(force).lower(),
                     remove_from_bench=str(remove_from_bench).lower())
 
 
 def set_maintenance(p: PilotClient, site: str, on: bool, pause_scheduler: bool | None = None):
     """PATCH {maintenance_mode, pause_scheduler} (sync, no task)."""
-    return p.patch(f"/sites/{site}/configuration", {
+    return p.patch(f"/sites/{seg(site)}/configuration", {
         "maintenance_mode": 1 if on else 0,
         "pause_scheduler": int(on if pause_scheduler is None else pause_scheduler)})
 
 
 def clear_cache(p: PilotClient, site: str):
-    return p.post(f"/sites/{site}/actions/clear-cache")
+    return p.post(f"/sites/{seg(site)}/actions/clear-cache")
 
 
 def migrate(p: PilotClient, site: str):
     """Migrate (409 task_conflict is common: use tasks.retry_conflict)."""
-    return p.post(f"/sites/{site}/actions/migrate")
+    return p.post(f"/sites/{seg(site)}/actions/migrate")
 
 
 def build_assets(p: PilotClient, site: str):
-    return p.post(f"/sites/{site}/actions/build-assets")
+    return p.post(f"/sites/{seg(site)}/actions/build-assets")
 
 
 def login_link(p: PilotClient, site: str, hint: str | None = None) -> str:
     """Site login link -> 201 {url}."""
-    r = p.post(f"/sites/{site}/login", {"hint": hint} if hint else {})
+    r = p.post(f"/sites/{seg(site)}/login", {"hint": hint} if hint else {})
     return r["url"]
 
 
 def drop_site(p: PilotClient, site: str, no_backup: bool = False):
     """DESTRUCTIVE; takes a backup first unless no_backup."""
-    return p.request("DELETE", f"/sites/{site}", params={"no_backup": "1"} if no_backup else None)
+    return p.request("DELETE", f"/sites/{seg(site)}", params={"no_backup": "1"} if no_backup else None)
 
 
-def rename_site(p: PilotClient, site: str, new_name: str, keep_old_hostname=False, make_primary=True):
-    return p.post(f"/sites/{site}/actions/rename",
-                  {"name": new_name, "keep_old_hostname": keep_old_hostname, "make_primary": make_primary})
+def rename_site(p: PilotClient, site: str, new_name: str, keep_old_hostname=False):
+    return p.post(f"/sites/{seg(site)}/actions/rename",
+                        {"new_name": new_name, "keep_old_hostname": keep_old_hostname})
 
 
 # ---- v1 additions
@@ -83,13 +83,13 @@ OPS = {"config_set": "site.config_set", "config_get": "site.config_get", "site_a
 
 
 def config_get(p: PilotClient, site: str):
-    return p.get(f"/sites/{site}/configuration")
+    return p.get(f"/sites/{seg(site)}/configuration")
 
 
 def config_set(p: PilotClient, site: str, **values):
     """PATCH any of maintenance_mode, pause_scheduler, ..."""
-    return p.patch(f"/sites/{site}/configuration", dict(values))
+    return p.patch(f"/sites/{seg(site)}/configuration", dict(values))
 
 
 def site_apps(p: PilotClient, site: str):
-    return p.get(f"/sites/{site}/apps")
+    return p.get(f"/sites/{seg(site)}/apps")

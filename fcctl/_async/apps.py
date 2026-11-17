@@ -3,8 +3,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from . import tasks
-from .pilot import PilotClient
+from ..errors import ApiError, UsageError
+from . import sites as _sites, tasks
+from .pilot import seg, PilotClient
 
 # Apps that need another app on the bench first, or Pilot's import validation fails.
 DEFAULT_DEPS: dict[str, list[str]] = {"hrms": ["erpnext"]}
@@ -40,11 +41,32 @@ async def list_apps(p: PilotClient):
 
 
 async def add_marketplace(p: PilotClient, name: str, sites: list[str] | None = None):
-    return await p.post("/apps", {"name": name, **({"sites": sites} if sites else {})})
+    """Add a marketplace app. With `sites`, install on each site (the dashboard's get-and-install-app path,
+    which skips the bench get-app validator); returns the last response (single site: its response).
+    Without sites, resolve the app in GET /marketplace/apps and POST /apps with its repo/branch."""
+    if sites:
+        res = [await _sites.install_app(p, s, app=name) for s in sites]
+        return res[0] if len(res) == 1 else res[-1]
+    reg = await p.get("/marketplace/apps")
+    rows = reg.get("apps", []) if isinstance(reg, dict) else (reg or [])
+    entry = next((a for a in rows if isinstance(a, dict) and a.get("name") == name), None)
+    if not entry or not entry.get("is_installable", True):
+        raise UsageError(f"{name!r} is not an installable marketplace app; "
+                         "use --site to install it on a site or add_repo for a GitHub repo")
+    return await p.post("/apps", {"name": name, "repo": entry.get("repo"), "branch": entry.get("branch"), "sites": []})
 
 
-async def add_repo(p: PilotClient, repo: str, branch: str, sites: list[str] | None = None):
-    return await p.post("/apps", {"repo": repo, "branch": branch, **({"sites": sites} if sites else {})})
+async def add_repo(p: PilotClient, repo: str, branch: str, sites: list[str] | None = None,
+                   name: str | None = None):
+    """Clone a repo into the bench. The app name comes from Pilot's repository resolution
+    (what the dashboard does) unless `name` is given, which skips the resolution."""
+    if not name:
+        res = await p.post("/git/repository-resolutions", {"repo": repo, "branch": branch})
+        name = res.get("name") if isinstance(res, dict) else None
+        if not name:
+            msg = (res.get("message") or res.get("error") or res) if isinstance(res, dict) else res
+            raise ApiError(f"could not resolve an app name for {repo}@{branch}: {msg}", body=res)
+    return await p.post("/apps", {"name": name, "repo": repo, "branch": branch, "sites": sites or []})
 
 
 def _task_id(resp: Any) -> str | None:
@@ -58,7 +80,7 @@ async def add_in_order(p: PilotClient, specs: list[dict], **wait_kw):
     wait_kw: timeout/poll (sleeping goes through _io)."""
     out = []
     for s in specs:
-        start = (lambda s=s: add_repo(p, s["repo"], s.get("branch", "main")) if "repo" in s
+        start = (lambda s=s: add_repo(p, s["repo"], s.get("branch", "main"), name=s.get("name")) if "repo" in s
                  else add_marketplace(p, s["name"]))
         resp = await tasks.retry_conflict(start)
         tid = _task_id(resp)
@@ -67,7 +89,23 @@ async def add_in_order(p: PilotClient, specs: list[dict], **wait_kw):
 
 
 async def check_updates(p: PilotClient):
-    return await p.post("/app-update-checks")
+    """Start a fetch-all-app-updates task (bench-wide git fetch); returns {task_id}."""
+    return await p.post("/apps/fetch")
+
+
+async def check_updates_result(p: PilotClient, task_id: str):
+    """Parse the last non-empty line of the task output as JSON ({app: {...}})."""
+    import json
+    out = await p.get(f"/tasks/{seg(task_id)}/output/content")
+    if isinstance(out, dict):
+        out = out.get("content", "")
+    lines = [ln for ln in str(out or "").splitlines() if ln.strip()]
+    if not lines:
+        return {}
+    try:
+        return json.loads(lines[-1])
+    except ValueError:
+        return {}
 
 
 async def update_apps(p: PilotClient, apps: list[str] | None = None, disable_safeguards: bool = False):
@@ -76,12 +114,12 @@ async def update_apps(p: PilotClient, apps: list[str] | None = None, disable_saf
 
 
 async def switch_branch(p: PilotClient, name: str, branch: str):
-    return await p.post(f"/apps/{name}/actions/switch-branch", {"branch": branch})
+    return await p.post(f"/apps/{seg(name)}/actions/switch-branch", {"branch": branch})
 
 
 async def remove_app(p: PilotClient, name: str):
     """Remove an app -> remove-app task."""
-    return await p.delete(f"/apps/{name}")
+    return await p.delete(f"/apps/{seg(name)}")
 
 
 OPS = {"remove_app": "app.remove", "list_apps": "app.list", "remove": "app.remove"}

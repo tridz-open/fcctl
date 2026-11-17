@@ -372,7 +372,7 @@ class FakeFrappeCloud:
             self.sites[t["site"]]["status"] = "active"
         elif t["type"] == "backup":
             self.backups[t["site"]].append({"timestamp": t["timestamp"], "status": "success",
-                                            "files": [{"id": "database", "name": "db.sql.gz"}]})
+                                            "files": [{"filename": "db.sql.gz", "kind": "database", "path": "/x/db.sql.gz", "size_bytes": 1}]})
 
     def _accept(self, c: Call, t: dict) -> httpx.Response:
         return _resp(202, {"task_id": t["task_id"], "status": t["status"]})
@@ -408,11 +408,24 @@ class FakeFrappeCloud:
         sm = re.match(r"/sites/([^/]+)(/.*)?$", path)
         if sm:
             return self._site(c, sm.group(1), sm.group(2) or "", body)
+        if path == "/marketplace/apps" and meth == "GET":
+            return _resp(200, [{"name": a["name"], "repo": f"https://github.com/fake/{a['name']}",
+                                "branch": "version-16", "is_installable": True} for a in self.apps])
         if path == "/apps" and meth == "GET":
             return _resp(200, {"apps": self.apps})
+        if path == "/git/repository-resolutions" and meth == "POST":
+            nm = body.get("repo", "").rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
+            return _resp(200, {"name": nm} if nm else {"message": "cannot resolve repository"})
         if path == "/apps" and meth == "POST":
             self.apps.append({"name": body.get("name") or body.get("repo")})
             return self._start(c, self.new_task("app_add"))
+        if path == "/apps/fetch" and meth == "POST":
+            return self._start(c, self.new_task("fetch_all_app_updates", _output=_json.dumps(
+                {a["name"]: {"has_update": False} for a in self.apps}) + "\n"))
+        om = re.match(r"/tasks/([^/]+)/output/content$", path)
+        if om and meth == "GET":
+            t = self.tasks.get(om.group(1))
+            return _resp(200, {"content": t.get("_output", "")}) if t else _pilot_err(404, "not_found")
         if path == "/tasks" and meth == "GET":
             return _resp(200, {"tasks": [self._public_task(t) for t in self.tasks.values()]})
         tm = re.match(r"/tasks/([^/]+)(/events)?$", path)
@@ -428,6 +441,11 @@ class FakeFrappeCloud:
             return _resp(200, self._public_task(t))
         if path == "/logs":
             return _resp(200, {"logs": [{"name": n, "has_errors": False} for n in self.logs]})
+        jm = re.match(r"/logs/([^/]+)$", path)
+        if jm and jm.group(1) in self.logs:
+            all_lines = self.logs[jm.group(1)].splitlines()
+            n = int(c.params.get("lines", len(all_lines)))
+            return _resp(200, {"filename": jm.group(1), "lines": all_lines[-n:] if n else []})
         lm = re.match(r"/logs/([^/]+)/(content|events)$", path)
         if lm and lm.group(1) in self.logs:
             if lm.group(2) == "content":
@@ -486,7 +504,7 @@ class FakeFrappeCloud:
             if not b:
                 return _pilot_err(404, "backup_not_found")
             if bm.group(2):
-                return _resp(200, {"links": {f["id"]: f"https://s3.fake.example/{name}/{f['name']}?sig=x"
+                return _resp(200, {"links": {f["kind"]: f"https://s3.fake.example/{name}/{f['filename']}?sig=x"
                                              for f in b["files"]}})
             return _resp(200, b)
         if rest == "/apps" and meth == "POST":

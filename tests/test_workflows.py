@@ -259,3 +259,20 @@ def test_site_admin_lazy_and_opt_in(jr):
     run(jr, api, workflow_id="w3", site="c.example.com", allow_existing_sites=True, post_restore_hooks=hooks, hook_resolver=res, admin_factory=factory,
         manifest=m).wait()
     assert opened.count("open") == 2
+
+
+def test_running_tasks_includes_queued():
+    import asyncio
+    from fcctl._async.workflows.provision import LiveApi
+
+    class P:
+        def __init__(self): self.calls = []
+        async def get(self, path, **params):
+            self.calls.append((path, params))
+            return {"tasks": [{"id": "a", "status": "queued"}, {"id": "b", "status": "running"},
+                              {"id": "c", "status": "success"}, {"id": "d", "status": "pending"}]}
+
+    p = P()
+    r = asyncio.run(LiveApi(p).running_tasks())
+    assert [t["id"] for t in r] == ["a", "b"]
+    assert p.calls == [("/tasks", {})]

@@ -46,6 +46,7 @@ class OpContext:
     actor: str = ""
     agent: bool = False
     dry_run: bool = False
+    record_dry_run: bool = False  # run fn under DryRunRecorder to capture would-be requests (real clients only)
     confirm: Any = None  # True, or the target string echoed back
     args: dict = field(default_factory=dict)
     kind: str = "central"  # plane for guard.request
@@ -72,9 +73,22 @@ def execute_decision(decision, label, target, fn, ctx: OpContext, *, is_read=Fal
     """Shared engine. `label` is the audit op name; `journal_op` the journal/idempotency op id."""
     dname = type(decision).__name__
     if ctx.dry_run:
-        return {"dry_run": True, "op": label, "target": str(target), "decision": dname,
+        plan = {"dry_run": True, "op": label, "target": str(target), "decision": dname,
                 "reason": getattr(decision, "reason", None), "team": ctx.eff.team, "login": ctx.eff.login,
                 "policy": ctx.eff.policy}
+        if ctx.record_dry_run and not is_read and not isinstance(decision, pol.Deny):
+            from .request import DryRunRecorder
+            DryRunRecorder.start()
+            try:
+                fn()
+            except Exception:  # only the recorded would-be requests matter
+                pass
+            finally:
+                reqs = DryRunRecorder.stop()
+            if reqs:
+                plan["request"] = reqs[0]
+                plan["requests"] = reqs
+        return plan
     if isinstance(decision, pol.Deny):
         _audit(ctx, label, target, "denied", reason=decision.reason)
         raise PolicyDenied(decision.reason)

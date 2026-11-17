@@ -1,0 +1,1625 @@
+[
+ {
+  "method": "GET",
+  "path": "/apps",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "installed"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/apps",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "add"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/apps/fetch",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "fetchUpdates"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/apps/{}/actions/switch-branch",
+  "body_keys": [
+   "branch"
+  ],
+  "query_keys": null,
+  "fn": [
+   "switchBranch"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/audit-events",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/audit-events/export",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/password",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "changeAdminPassword"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/auth/session",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "logout"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/auth/session",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "session"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/session",
+  "body_keys": [
+   "otp",
+   "password",
+   "sid"
+  ],
+  "query_keys": null,
+  "fn": [
+   "login",
+   "loginWithSid"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/auth/sessions",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/sessions/revoke/all",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "revokeAll"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/sessions/revoke/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "revoke"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/auth/two-factor",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "status"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/two-factor/enrollment",
+  "body_keys": [
+   "name"
+  ],
+  "query_keys": null,
+  "fn": [
+   "startEnrollment"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/auth/two-factor/recovery-codes",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "regenerateRecoveryCodes"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/bench-readiness-checks",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "ready"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/benches",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/benches",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "create"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/benches/domain-options",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "wildcardDomains"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/benches/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "drop"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/benches/{}/actions/clone",
+  "body_keys": [
+   "app_branches",
+   "branch",
+   "name"
+  ],
+  "query_keys": null,
+  "fn": [
+   "clone"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/benches/{}/actions/restart",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "restart"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/benches/{}/actions/start",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "start"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/benches/{}/actions/stop",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "stop"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/benches/{}/clone-apps",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "cloneApps"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/benches/{}/clone-apps/{}/branches",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "cloneAppBranches"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/bootstrap",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "bootstrap"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/cli-auto-update",
+  "body_keys": [
+   "enabled"
+  ],
+  "query_keys": null,
+  "fn": [
+   "autoUpdate"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/cli-update-checks",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "check"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/cli-updates",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "status"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/console/completions",
+  "body_keys": [
+   "code",
+   "column",
+   "controllers",
+   "line"
+  ],
+  "query_keys": null,
+  "fn": [
+   "completions"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/console/docstring",
+  "body_keys": [
+   "code",
+   "column",
+   "controllers",
+   "line",
+   "name"
+  ],
+  "query_keys": null,
+  "fn": [
+   "docstring"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/binlogs",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/binlogs/purge",
+  "body_keys": [
+   "up_to"
+  ],
+  "query_keys": null,
+  "fn": [
+   "purge"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/configurations",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/configurations/{}",
+  "body_keys": [
+   "value"
+  ],
+  "query_keys": null,
+  "fn": [
+   "set"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/deadlocks",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "deadlocks"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/diagnostics",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "diagnostics"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/history",
+  "body_keys": null,
+  "query_keys": [
+   "window"
+  ],
+  "fn": [
+   "dbHistory"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/lockwaits",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "lockWaitRows"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/performance-report",
+  "body_keys": null,
+  "query_keys": [
+   "limit",
+   "offset",
+   "report_type",
+   "site"
+  ],
+  "fn": [
+   "performanceReport"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/processlist",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "processList"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/processlist/kill",
+  "body_keys": [
+   "process_id"
+  ],
+  "query_keys": null,
+  "fn": [
+   "killProcess"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/queries",
+  "body_keys": [
+   "query",
+   "read_only",
+   "site"
+  ],
+  "query_keys": null,
+  "fn": [
+   "execute"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/quick-actions",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "capabilities"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/quick-actions/innodb-buffer-pool-size",
+  "body_keys": [
+   "size_mb"
+  ],
+  "query_keys": null,
+  "fn": [
+   "setInnoDBBufferPoolSize"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/quick-actions/max-connections",
+  "body_keys": [
+   "max_connections"
+  ],
+  "query_keys": null,
+  "fn": [
+   "setMaxConnections"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/quick-actions/memory-share",
+  "body_keys": [
+   "memory_share"
+  ],
+  "query_keys": null,
+  "fn": [
+   "setMemoryShare"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/quick-actions/performance-schema",
+  "body_keys": [
+   "enabled"
+  ],
+  "query_keys": null,
+  "fn": [
+   "setPerformanceSchema"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/database/quick-actions/restart",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "restart"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/schema",
+  "body_keys": null,
+  "query_keys": [
+   "site"
+  ],
+  "fn": [
+   "schema"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/sites",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "sites"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/size",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "size"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/slow-queries",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "slowQueries"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/database/table-sizes",
+  "body_keys": null,
+  "query_keys": [
+   "site"
+  ],
+  "fn": [
+   "tableSizes"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/git/branches",
+  "body_keys": null,
+  "query_keys": [
+   "repo"
+  ],
+  "fn": [
+   "branches"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/git/connection",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "disconnect"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/git/connection",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "status"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/git/connection",
+  "body_keys": [
+   "provider",
+   "token",
+   "username"
+  ],
+  "query_keys": null,
+  "fn": [
+   "connect"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/git/connection-attempts",
+  "body_keys": [
+   "return_url"
+  ],
+  "query_keys": null,
+  "fn": [
+   "connectViaCentral"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/git/repositories",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "repos"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/git/repository-resolutions",
+  "body_keys": [
+   "branch",
+   "repo"
+  ],
+  "query_keys": null,
+  "fn": [
+   "resolve"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/health",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/logs",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/logs/{}",
+  "body_keys": null,
+  "query_keys": [
+   "lines"
+  ],
+  "fn": [
+   "read"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/logs/{}/content",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/logs/{}/events",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/marketplace/apps",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "marketplace"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/metrics",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "stats"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/migrations",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/migrations/current",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "current"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/migrations/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "detail"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/migrations/{}/actions/bypass-patch",
+  "body_keys": [
+   "patch"
+  ],
+  "query_keys": null,
+  "fn": [
+   "bypassPatch"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/migrations/{}/actions/dismiss",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "dismiss"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/migrations/{}/actions/restore",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "restore"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/migrations/{}/actions/retry",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "retry"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/monitor/history",
+  "body_keys": null,
+  "query_keys": [
+   "window"
+  ],
+  "fn": [
+   "history"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/network/client",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "myIp"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/notifications",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/read-all",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "markAllRead"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/webhooks/test",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "testWebhook"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/notifications/{}/read",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "markRead"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/settings",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "get"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/settings",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/settings/cloudflare",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "cloudflareStatus"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/settings/common-site-config",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "get"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/settings/common-site-config",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "update"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/settings/common-site-config/managed-keys",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "managedKeys"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/settings/llm/models",
+  "body_keys": [
+   "api_base",
+   "api_key",
+   "provider"
+  ],
+  "query_keys": null,
+  "fn": [
+   "llmModels"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/settings/s3/frappe-regions",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "frappeStorageRegions"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/setup/actions/finish",
+  "body_keys": [
+   "task_id"
+  ],
+  "query_keys": null,
+  "fn": [
+   "finish"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/setup/actions/start",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "start"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/setup/configuration",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "config"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/setup/configuration",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "save"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/setup/database-validations",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "validateDatabase"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/setup/framework-branches",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "branches"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "create"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/storage",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "storage"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/wildcard-domains",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "wildcardList"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/sites/{}",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "drop"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "detail"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/build-assets",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "buildAssets"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/clear-cache",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "clearCache"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/clone",
+  "body_keys": [
+   "name",
+   "target_bench"
+  ],
+  "query_keys": null,
+  "fn": [
+   "clone"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/enable-tls",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "enableTls"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/migrate",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "migrate"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/refresh-storage",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "refreshStorage"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/reinstall",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "reinstall"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/remote-backups",
+  "body_keys": [
+   "password",
+   "remote_site"
+  ],
+  "query_keys": null,
+  "fn": [
+   "remoteBackups"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/rename",
+  "body_keys": [
+   "keep_old_hostname",
+   "new_name"
+  ],
+  "query_keys": null,
+  "fn": [
+   "rename"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/actions/restore",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "restore"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/apps",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/apps",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "install"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/sites/{}/apps/{}",
+  "body_keys": null,
+  "query_keys": [
+   "remove_from_bench"
+  ],
+  "fn": [
+   "remove"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/sites/{}/backup-schedule",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "remove"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/backup-schedule",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "get"
+  ]
+ },
+ {
+  "method": "PUT",
+  "path": "/sites/{}/backup-schedule",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "set"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/backups",
+  "body_keys": null,
+  "query_keys": [
+   "<dynamic>"
+  ],
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/backups",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "create"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/backups/{}/download-links",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "downloadLinks"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/sites/{}/backups/{}/files/{}/content",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/configuration",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "get"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/sites/{}/configuration",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "update"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/console",
+  "body_keys": [
+   "code",
+   "commit"
+  ],
+  "query_keys": null,
+  "fn": [
+   "runConsoleScript"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/console/doctypes",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "consoleDoctypes"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/console/doctypes/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "consoleDoctype"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/domains",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/domains",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "add"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/sites/{}/domains/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "remove"
+  ]
+ },
+ {
+  "method": "PATCH",
+  "path": "/sites/{}/domains/{}",
+  "body_keys": [
+   "primary"
+  ],
+  "query_keys": null,
+  "fn": [
+   "setPrimary"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/domains/{}/dns-records",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "dnsRecords"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/sites/{}/integrations/frappe-cloud",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "disconnect"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/integrations/frappe-cloud",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "connection"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/integrations/frappe-cloud",
+  "body_keys": [
+   "remote_site"
+  ],
+  "query_keys": null,
+  "fn": [
+   "connect"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/integrations/frappe-cloud/backups",
+  "body_keys": null,
+  "query_keys": [
+   "start"
+  ],
+  "fn": [
+   "backups"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/integrations/frappe-cloud/backups",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "takeBackup"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/integrations/frappe-cloud/backups/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "backup"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/login",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "loginLink"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/monitoring",
+  "body_keys": null,
+  "query_keys": [
+   "window"
+  ],
+  "fn": [
+   "get"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/sites/{}/uploads",
+  "body_keys": [
+   "files"
+  ],
+  "query_keys": null,
+  "fn": [
+   "start"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/sites/{}/uploads/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "cancel"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/uploads/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "exists",
+   "status"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/sites/{}/uploads/{}/files/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/sites/{}/uptime",
+  "body_keys": null,
+  "query_keys": [
+   "window"
+  ],
+  "fn": [
+   "get"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/ssh-keys",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/ssh-keys",
+  "body_keys": [
+   "public_key"
+  ],
+  "query_keys": null,
+  "fn": [
+   "add"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/ssh-keys/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "remove"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/storage",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "storage"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/system",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "systemInfo"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/tasks",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "list"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/tasks",
+  "body_keys": [
+   "command"
+  ],
+  "query_keys": null,
+  "fn": [
+   "run"
+  ]
+ },
+ {
+  "method": "DELETE",
+  "path": "/tasks/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "cancel"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/tasks/{}",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "detail"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/tasks/{}/actions/retry",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "retry"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/tasks/{}/debug",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/tasks/{}/events",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/tasks/{}/output/content",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "output"
+  ]
+ },
+ {
+  "method": "GET*",
+  "path": "/tasks/{}/output/content",
+  "body_keys": null,
+  "query_keys": null,
+  "fn": [
+   "url"
+  ]
+ },
+ {
+  "method": "POST",
+  "path": "/updates",
+  "body_keys": [
+   "<dynamic>"
+  ],
+  "query_keys": null,
+  "fn": [
+   "createUpdate"
+  ]
+ },
+ {
+  "method": "GET",
+  "path": "/waf",
+  "body_keys": null,
+  "query_keys": [
+   "window"
+  ],
+  "fn": [
+   "waf"
+  ]
+ }
+]

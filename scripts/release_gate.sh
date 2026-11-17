@@ -31,7 +31,8 @@ fi
 hit "billing identifiers" "${G[@]}" -i 'last4|card_last|exp_month|exp_year|mandate_id|razorpay|stripe_(customer|payment)' .
 hit "card numbers" "${G[@]}" '\b(4[0-9]{12}([0-9]{3})?|5[1-5][0-9]{14})\b' .
 hit "local paths" "${G[@]}" '/Users/|/private/tmp|/home/[a-z]' .
-hit "internal project refs" "${G[@]}" -i 'ury-portal|ury saas|URY_ORDER|\bury\b' .
+# URY is named publicly only in the README's "Why it exists" paragraph (the owner's decision); internal refs stay out.
+hit "internal project refs" bash -c "$(printf '%q ' "${G[@]}") -i 'ury-portal|ury saas|URY_ORDER|\\bury\\b' . | rg -v '^\\./README\\.md:[0-9]+:fcctl was created to start the SaaS work behind \\[URY\\]'"
 hit "real gateway host" "${G[@]}" 'bom\.frappe\.cloud' .
 hit "missing research refs" "${G[@]}" 'research/' . -g '!.gitignore'
 hit "phone numbers" "${G[@]}" -i '\+91[ -]?[0-9]{5}|[0-9]{10}' docs README.md

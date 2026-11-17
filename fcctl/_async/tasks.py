@@ -5,7 +5,7 @@ from typing import Any, AsyncIterator, Callable
 
 from ..request import TaskConflict, TaskFailed
 from . import _io
-from .pilot import PilotClient
+from .pilot import seg, PilotClient
 
 TERMINAL = ("success", "failed", "killed")
 
@@ -24,7 +24,7 @@ async def retry_conflict(fn: Callable[[], Any], attempts: int = 8, base: float =
 async def wait_task(pilot: PilotClient, task_id: str, timeout: float = 3600, poll: float = 15) -> dict:
     dl = _io.Deadline(timeout)
     while True:
-        t = await pilot.get(f"/tasks/{task_id}")
+        t = await pilot.get(f"/tasks/{seg(task_id)}")
         if t.get("status") in TERMINAL:
             if t["status"] != "success":
                 raise TaskFailed(f"task {task_id} {t['status']}: {t.get('failure')}", body=t)
