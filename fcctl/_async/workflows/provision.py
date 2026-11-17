@@ -59,9 +59,9 @@ class LiveApi:
         return [s["name"] if isinstance(s, dict) else s for s in r or []]
 
     async def running_tasks(self):
-        r = await self.pilot.get("/tasks", status="running")
+        r = await self.pilot.get("/tasks")
         r = r.get("tasks", r) if isinstance(r, dict) else r
-        return [t for t in r or [] if isinstance(t, dict) and t.get("status") in ("running", "pending", "queued")]
+        return [t for t in r or [] if isinstance(t, dict) and t.get("status") in ("queued", "running")]
 
     async def bench_apps(self):
         r = await apps_mod.list_apps(self.pilot)
