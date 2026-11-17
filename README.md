@@ -1,6 +1,12 @@
 # fcctl
 
+> **Experimental. Built on a pre-public API.** fcctl talks to Frappe Cloud's private dashboard and Pilot endpoints, which are not a published API and can change without notice. Expect breaking changes between 0.x releases, pin a version, and try writes on a throwaway site first. See [Status](#status-alpha-unofficial-api).
+
 A Python 3.11+ CLI and library for Frappe Cloud v2. It covers both halves of the platform: Central (`dashboard.frappe.io`: team, billing, servers, snapshots, buckets) and Pilot (the gateway on each server: sites, apps, backups, tasks, logs). It adds a safety layer on top: per-profile policies, approval for destructive operations, a local journal so interrupted operations can be reconciled, and a hash-chained audit log.
+
+## Why it exists
+
+fcctl was created to start the SaaS work behind [URY](https://ury.app), an open-source restaurant POS and ERP built on Frappe and ERPNext ([github.com/ury-erp/ury](https://github.com/ury-erp/ury)). URY's hosted offering needed to create, restore and manage customer sites on Frappe Cloud from a control plane, without a person clicking through the dashboard. fcctl is that automation layer, kept product-neutral so any Frappe SaaS can use it.
 
 ## A note to the Frappe team
 
@@ -120,6 +126,66 @@ Then confirm the session:
 ```bash
 fcctl auth whoami            # add --caps to list your capabilities
 fcctl doctor                 # checks the key, config, profile and session
+```
+
+## Usage examples
+
+**Sign in once, then check the session**
+
+```bash
+fcctl profile create work --email you@example.com --team TEAM-xxxxx
+fcctl profile use work
+fcctl auth login                       # emails you a code; paste it
+fcctl doctor                           # key, config, profile and session
+```
+
+**Install a marketplace app on a site**
+
+```bash
+# Fetch and install in one step, the same call the dashboard makes.
+fcctl app add india_compliance --site shop.example.com -s server-xxxx
+
+# Add to the bench only (no site); runs the bench validator.
+fcctl app add hrms -s server-xxxx
+
+# A private or forked app from GitHub, on a specific branch.
+fcctl app add --repo https://github.com/you/your_app --branch main -s server-xxxx
+```
+
+**Provision a customer site (preview first)**
+
+```bash
+fcctl site provision acme.bom.frappe.cloud -s server-xxxx \
+  --app erpnext --app hrms --dry-run       # shows the plan, changes nothing
+fcctl site provision acme.bom.frappe.cloud -s server-xxxx --app erpnext --app hrms
+```
+
+**Back up before a risky change, and wait on long tasks**
+
+```bash
+fcctl backup create acme.bom.frappe.cloud -s server-xxxx   # waits by default
+fcctl task list -s server-xxxx -o json | jq '.[0] | {command, status}'
+fcctl task output TASK_ID -s server-xxxx   # full log of a failed task
+```
+
+**Script it: JSON out, exit codes in**
+
+```bash
+if ! fcctl site get acme.bom.frappe.cloud -s server-xxxx -o json > site.json; then
+  echo "lookup failed with exit $?"   # 3 auth, 5 not found, 10 Cloudflare challenge ...
+fi
+```
+
+**From Python**
+
+```python
+from fcctl import Client
+from fcctl.session_store import SessionStore
+
+c = Client(SessionStore(), team="TEAM-xxxxx")   # uses the session from `fcctl auth login`
+for site in c.sites.list("server-xxxx"):
+    print(site["name"], site.get("status"))
+c.close()
 ```
 
 ## Common commands
