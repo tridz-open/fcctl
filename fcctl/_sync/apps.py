@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..errors import ApiError
-from . import tasks
+from ..errors import ApiError, UsageError
+from . import sites as _sites, tasks
 from .pilot import PilotClient
 
 # Apps that need another app on the bench first, or Pilot's import validation fails.
@@ -42,7 +42,19 @@ def list_apps(p: PilotClient):
 
 
 def add_marketplace(p: PilotClient, name: str, sites: list[str] | None = None):
-    return p.post("/apps", {"name": name, **({"sites": sites} if sites else {})})
+    """Add a marketplace app. With `sites`, install on each site (the dashboard's get-and-install-app path,
+    which skips the bench get-app validator); returns the last response (single site: its response).
+    Without sites, resolve the app in GET /marketplace/apps and POST /apps with its repo/branch."""
+    if sites:
+        res = [_sites.install_app(p, s, app=name) for s in sites]
+        return res[0] if len(res) == 1 else res[-1]
+    reg = p.get("/marketplace/apps")
+    rows = reg.get("apps", []) if isinstance(reg, dict) else (reg or [])
+    entry = next((a for a in rows if isinstance(a, dict) and a.get("name") == name), None)
+    if not entry or not entry.get("is_installable", True):
+        raise UsageError(f"{name!r} is not an installable marketplace app; "
+                         "use --site to install it on a site or add_repo for a GitHub repo")
+    return p.post("/apps", {"name": name, "repo": entry.get("repo"), "branch": entry.get("branch"), "sites": []})
 
 
 def add_repo(p: PilotClient, repo: str, branch: str, sites: list[str] | None = None,

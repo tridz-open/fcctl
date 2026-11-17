@@ -78,7 +78,7 @@ def a_check_updates(ctx, args):
 def register(sub, common):
     g = sub.add_parser("app", parents=[common], help="bench / site apps").add_subparsers(dest="app_cmd", required=True)
     x = g.add_parser("list", parents=[common]); x.add_argument("--site"); x.set_defaults(func=a_list)
-    x = g.add_parser("add", parents=[common], help="add an app to the bench")
+    x = g.add_parser("add", parents=[common], help="add an app (prefer --site: installs on a site; bench-only adds can fail validation)")
     x.add_argument("name", nargs="?"); x.add_argument("--repo"); x.add_argument("--branch")
     x.add_argument("--sites", nargs="*")
     x.add_argument("--site", action="append", help="fetch and install NAME on this site (repeatable) instead of only adding it to the bench")

@@ -408,6 +408,9 @@ class FakeFrappeCloud:
         sm = re.match(r"/sites/([^/]+)(/.*)?$", path)
         if sm:
             return self._site(c, sm.group(1), sm.group(2) or "", body)
+        if path == "/marketplace/apps" and meth == "GET":
+            return _resp(200, [{"name": a["name"], "repo": f"https://github.com/fake/{a['name']}",
+                                "branch": "version-16", "is_installable": True} for a in self.apps])
         if path == "/apps" and meth == "GET":
             return _resp(200, {"apps": self.apps})
         if path == "/git/repository-resolutions" and meth == "POST":
