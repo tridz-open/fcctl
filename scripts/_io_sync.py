@@ -1,0 +1,53 @@
+"""Handwritten sync twin of fcctl/_async/_io.py; gen_sync.py copies it verbatim to fcctl/_sync/_io.py."""
+from __future__ import annotations
+
+import threading
+import time
+from typing import Iterator
+
+import httpx
+
+
+def sleep(seconds: float) -> None:
+    time.sleep(seconds)
+
+
+def now() -> float:
+    return time.monotonic()
+
+
+class Deadline:
+    def __init__(self, timeout: float, clock=now):
+        self.clock = clock
+        self.at = clock() + timeout
+
+    def expired(self) -> bool:
+        return self.clock() >= self.at
+
+
+class Semaphore:
+    def __init__(self, n: int):
+        self._s = threading.Semaphore(n)
+
+    def __enter__(self):
+        self._s.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self._s.release()
+
+
+class Lock:
+    def __init__(self):
+        self._l = threading.Lock()
+
+    def __enter__(self):
+        self._l.acquire()
+        return self
+
+    def __exit__(self, *exc):
+        self._l.release()
+
+
+def iter_lines(resp: httpx.Response) -> Iterator[str]:
+    yield from resp.iter_lines()

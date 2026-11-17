@@ -1,0 +1,496 @@
+"""provision_site workflow. Journaled, resumable (async core; sync twin generated).
+
+One journal entry (id == workflow_id, op "provision_site") carries `wf` = recipe, per-step results,
+ownership facts (created_site task id + time, never read from site_config) and decisions.
+Steps 1-4 failing leaves the entry RUNNING (resumable); 5-10 failing -> needs_attention.
+All remote calls go through a small `Api` adapter (LiveApi wraps the existing fcctl modules).
+"""
+from __future__ import annotations
+
+import uuid
+from typing import Callable
+
+from .. import apps as apps_mod, billing, servers, sites, tasks, transfer
+from ... import journal as J
+from ...errors import NameConflict, NotFound, PolicyDenied, QuotaExceeded, UsageError, FcError, WaitTimeout
+from . import site_health
+from .hooks import builtin_resolver, settle, task_id_of
+from .types import (AppSource, BackupSource, HookRef, ManifestMismatch, ResumeRefused, ServerSpec,
+                    StepContext, TemplateManifest, UploadedBackup, parse_age)
+
+STEPS = ["preflight", "server", "bench_apps", "create_site", "isolate", "restore", "reisolate",
+         "hooks", "config", "health"]
+LATE = set(STEPS[4:])  # failure here -> needs_attention
+OWNED_WINDOW = 3600.0
+MIN_VCPU = 1.0  # default refuses 0.5 vCPU plans (Starter hang incident)
+
+
+class LiveApi:
+    """Default adapter over the existing modules."""
+
+    def __init__(self, pilot, central=None, source_pilot=None, timeout=None, poll=None):
+        # no `sleep=`: sleeping goes through _io (patch _io.sleep in tests)
+        self.pilot, self.central, self.source_pilot = pilot, central, source_pilot
+        self.timeout, self.poll = timeout, poll  # None -> module defaults (task 3600s, server 900s)
+
+    def _kw(self):
+        kw = {}
+        if self.timeout is not None:
+            kw["timeout"] = self.timeout
+        if self.poll is not None:
+            kw["poll"] = self.poll
+        return kw
+
+    async def _wait(self, tid):
+        try:
+            return await tasks.wait_task(self.pilot, tid, **self._kw())
+        except TimeoutError as e:
+            raise WaitTimeout(f"{e}; remote continues: fcctl task attach {tid}", body={"task_id": tid}) from None
+
+    async def get_site(self, site):
+        try:
+            return await sites.get_site(self.pilot, site)
+        except NotFound:
+            return None
+
+    async def bench_sites(self):
+        r = await sites.list_sites(self.pilot)
+        r = r.get("sites", r) if isinstance(r, dict) else r
+        return [s["name"] if isinstance(s, dict) else s for s in r or []]
+
+    async def running_tasks(self):
+        r = await self.pilot.get("/tasks", status="running")
+        r = r.get("tasks", r) if isinstance(r, dict) else r
+        return [t for t in r or [] if isinstance(t, dict) and t.get("status") in ("running", "pending", "queued")]
+
+    async def bench_apps(self):
+        r = await apps_mod.list_apps(self.pilot)
+        r = r.get("apps", r) if isinstance(r, dict) else r
+        return {a["name"]: a for a in r or []}
+
+    async def add_app(self, spec):
+        return await apps_mod.add_in_order(self.pilot, [spec])
+
+    async def create_site(self, site, apps, key):
+        return await sites.create_site(self.pilot, site, apps, key=key)
+
+    async def wait_task(self, tid):
+        return await self._wait(tid)
+
+    async def trust_tier(self):
+        return (await billing.trust_tier(self.central)) if self.central else {}
+
+    async def create_server(self, spec: ServerSpec, request_key):
+        return await servers.create_server(self.central, spec.title or request_key, spec.plan, spec.image,
+                                     region=spec.region, request_key=request_key)
+
+    async def wait_server(self, resource_id):
+        try:
+            return await servers.wait_running(self.central, resource_id, **self._kw())
+        except TimeoutError as e:
+            raise WaitTimeout(f"{e} (still provisioning remotely)") from None
+
+    async def set_maintenance(self, site, on):
+        return await sites.set_maintenance(self.pilot, site, on)
+
+    async def site_config(self, site):
+        info = await self.get_site(site) or {}
+        info = info.get("site", info) if isinstance(info.get("site"), dict) else info
+        return info.get("config") or info
+
+    async def patch_config(self, site, cfg):
+        return await self.pilot.patch(f"/sites/{site}/configuration", cfg)
+
+    def backup_age(self, src: BackupSource):
+        return None
+
+    async def restore(self, src: BackupSource | UploadedBackup, site, state, progress):
+        if isinstance(src, UploadedBackup):
+            raise UsageError("UploadedBackup restore requires a custom Api adapter")
+        return await transfer.restore_from_site_backup(self.source_pilot or self.pilot, src.site, src.backup,
+                                                 self.pilot, site, state=state, progress=progress)
+
+    async def health(self, site):
+        return await site_health.check_site_health(self.pilot, site)
+
+
+def is_workflow_owned(jrnl, workflow_id: str, site: str, now: float, policy: str = "guarded") -> bool:
+    """Journal shows this workflow created `site` (task id recorded), <1h ago,
+    no handed_off, and policy is full|guarded."""
+    if policy not in ("full", "guarded"):
+        return False
+    try:
+        wf = jrnl.get(workflow_id).get("wf") or {}
+    except (FileNotFoundError, OSError):
+        return False
+    cs = wf.get("created_site") or {}
+    if cs.get("site") != site or not cs.get("task_id") or wf.get("workflow_id", workflow_id) != workflow_id:
+        return False
+    if wf.get("handed_off"):
+        return False
+    return 0 <= now - float(cs.get("at", 0)) < OWNED_WINDOW
+
+
+class ProvisionRun:
+    def __init__(self, *, workflow_id, site, journal, pilot, central=None, api=None, recipe=None,
+                 hook_resolver=None, manifest=None, admin=None, eff=None, source_eff=None, health_checks=None,
+                 min_vcpu=MIN_VCPU, allow_existing_sites=False, allow_hook_upgrade=False,
+                 pilot_factory=None, server=None, bench_apps=(), site_apps=(), from_backup=None,
+                 post_restore_hooks=(), config=None, needs_site_admin=False, admin_factory=None):
+        self.needs_site_admin, self.admin_factory = needs_site_admin, admin_factory
+        self.workflow_id, self.site, self.journal = workflow_id, site, journal
+        self.pilot, self.central = pilot, central
+        self.api = api or LiveApi(pilot, central)
+        self.manifest, self.admin, self.eff, self.source_eff = manifest, admin, eff, source_eff
+        self.health_checks = health_checks
+        self.min_vcpu, self.allow_existing_sites = min_vcpu, allow_existing_sites
+        self.allow_hook_upgrade, self.pilot_factory = allow_hook_upgrade, pilot_factory
+        self.server, self.bench_apps, self.site_apps = server, list(bench_apps), list(site_apps)
+        self.from_backup, self.hooks, self.config = from_backup, list(post_restore_hooks), dict(config or {})
+        self.resolver = hook_resolver
+        self._builtin = builtin_resolver()
+        self.recipe = recipe or self._recipe()
+        self._init_entry()
+
+    # ---------- journal ----------
+    def _recipe(self):
+        fb = self.from_backup
+        return {"site": self.site,
+                "server": self.server.to_dict() if isinstance(self.server, ServerSpec) else self.server,
+                "bench_apps": [a.to_dict() if isinstance(a, AppSource) else {"name": a} for a in self.bench_apps],
+                "site_apps": self.site_apps,
+                "from_backup": ({"type": type(fb).__name__, **fb.to_dict()} if fb is not None else None),
+                "manifest": self.manifest.to_dict() if self.manifest else None,
+                "hooks": [h.to_dict() for h in self.hooks], "config": self.config}
+
+    def _entry(self):
+        return self.journal.get(self.workflow_id)
+
+    def _save(self, mutate: Callable[[dict], None]):
+        e = self._entry()
+        mutate(e.setdefault("wf", {}))
+        e["updated_at"] = self.journal.now()
+        self.journal._write(e)
+
+    def _init_entry(self):
+        try:
+            e = self._entry()
+        except FileNotFoundError:
+            e = None
+        if e is None:
+            e = self.journal.create("provision_site", {"site": self.site}, jid=self.workflow_id)
+            for s in (J.DISPATCHING, J.SUBMITTED, J.RUNNING):
+                self.journal.transition(self.workflow_id, s, **({"handle": self.workflow_id} if s == J.SUBMITTED else {}))
+            self._save(lambda wf: wf.update(workflow_id=self.workflow_id, recipe=self.recipe, steps={},
+                                            timings={}, decisions=[], started_at=self.journal.now()))
+            return
+        wf = e.get("wf") or {}
+        old = wf.get("recipe")
+        if old is not None and old != self.recipe:
+            diffs = self._diff(old, self.recipe)
+            if not self.allow_hook_upgrade:
+                raise ResumeRefused(f"resume of {self.workflow_id} refused: recipe/hook versions changed ({diffs})",
+                                    what="journaled recipe differs from the one supplied",
+                                    why="; ".join(diffs), fix="re-run with allow_hook_upgrade=True to accept")
+            self._save(lambda w: (w["decisions"].append({"decision": "allow_hook_upgrade", "diff": diffs,
+                                                         "at": self.journal.now()}), w.update(recipe=self.recipe)))
+
+    @staticmethod
+    def _diff(old, new):
+        out = []
+        oh = {h["name"]: h.get("version") for h in old.get("hooks", [])}
+        nh = {h["name"]: h.get("version") for h in new.get("hooks", [])}
+        for n in sorted(set(oh) | set(nh)):
+            if oh.get(n) != nh.get(n):
+                out.append(f"hook {n}: {oh.get(n)} -> {nh.get(n)}")
+        out += [f"{k} changed" for k in sorted(set(old) | set(new)) if k != "hooks" and old.get(k) != new.get(k)]
+        if not out:
+            out.append("hook args changed")
+        return out
+
+    # ---------- driver ----------
+    def wf(self):
+        return self._entry().get("wf") or {}
+
+    def status(self):
+        return self._entry()["state"]
+
+    async def wait(self) -> dict:
+        e = self._entry()
+        if e["state"] == J.SUCCEEDED:
+            return self.result()
+        if e["state"] == J.NEEDS_ATTENTION:
+            self.journal.transition(self.workflow_id, J.RUNNING)
+        elif e["state"] in (J.FAILED,):
+            raise FcError(f"workflow {self.workflow_id} already failed")
+        done = self.wf().get("steps", {})
+        for step in STEPS:
+            if step in done:
+                continue
+            t0 = self.journal.now()
+            try:
+                out = await getattr(self, "_s_" + step)()
+            except BaseException as exc:
+                self._save(lambda w: w.update(error=f"{step}: {type(exc).__name__}: {exc}", failed_step=step))  # noqa: F821 (closure runs inside the except block)
+                if step in LATE:
+                    self.journal.transition(self.workflow_id, J.NEEDS_ATTENTION,
+                                            error=f"{step}: {type(exc).__name__}: {exc}")
+                raise
+            dt = self.journal.now() - t0
+            self._save(lambda w: (w["steps"].__setitem__(step, {"done": True, "result": out}),
+                                  w["timings"].__setitem__(step, dt), w.pop("error", None)))
+        self.journal.transition(self.workflow_id, J.SUCCEEDED, result=self.result())
+        return self.result()
+
+    def result(self) -> dict:
+        wf = self.wf()
+        return {"site": self.site, "workflow_id": self.workflow_id, "timings": dict(wf.get("timings", {}))}
+
+    def to_dict(self) -> dict:
+        e = self._entry()
+        wf = e.get("wf") or {}
+        return {"workflow_id": self.workflow_id, "site": self.site, "state": e["state"],
+                "steps": {k: bool(v.get("done")) for k, v in wf.get("steps", {}).items()},
+                "timings": wf.get("timings", {}), "error": wf.get("error"), "recipe": wf.get("recipe"),
+                "decisions": wf.get("decisions", []), "result": self.result()}
+
+    @classmethod
+    def from_dict(cls, d: dict, **deps) -> "ProvisionRun":
+        """Rebuild from a to_dict() payload; deps = journal, pilot, central?, hook_resolver?, api?, ...
+        The recipe in `d` is used, so it always matches the journal."""
+        r = d["recipe"]
+        fb = r.get("from_backup")
+        if fb:
+            t = fb.pop("type")
+            fb = (BackupSource if t == "BackupSource" else UploadedBackup)(**fb)
+        srv = r.get("server")
+        return cls(workflow_id=d["workflow_id"], site=d["site"],
+                   server=ServerSpec(**srv) if isinstance(srv, dict) else srv,
+                   bench_apps=[AppSource(**a) for a in r["bench_apps"]], site_apps=r["site_apps"],
+                   from_backup=fb, manifest=TemplateManifest(**r["manifest"]) if r.get("manifest") else None,
+                   post_restore_hooks=[HookRef.from_dict(h) for h in r["hooks"]], config=r["config"], **deps)
+
+    # ---------- steps ----------
+    def _created(self):
+        return (self.wf().get("created_site") or {})
+
+    def _own_site(self) -> bool:
+        cs = self._created()
+        return cs.get("site") == self.site and bool(cs.get("task_id") or cs.get("idem_key"))
+
+    async def _s_preflight(self):
+        eff = self.eff
+        if eff is not None and eff.policy not in ("full", "guarded"):
+            if not (eff.policy == "protected" and {"site.create", "backup.restore"} <= set(eff.allow)):
+                raise PolicyDenied(f"profile policy {eff.policy!r} does not allow provisioning writes")
+        se = self.source_eff
+        if se is not None and isinstance(self.from_backup, BackupSource) and se.policy == "protected" \
+                and "backup.download_links" not in se.allow:
+            raise PolicyDenied("source profile is protected and does not allow backup.download_links")
+        spec = self.server if isinstance(self.server, ServerSpec) else None
+        if spec:
+            if spec.vcpu is not None and spec.vcpu < self.min_vcpu:
+                raise UsageError(f"plan {spec.plan} has {spec.vcpu} vCPU, below minimum {self.min_vcpu}",
+                                 fix="choose a larger plan or lower min_vcpu")
+            await self._quota(spec)
+        if isinstance(self.from_backup, BackupSource) and self.from_backup.max_age:
+            lim, age = parse_age(self.from_backup.max_age), (await settle(self.api.backup_age(self.from_backup)))
+            if age is not None and age > lim:
+                raise UsageError(f"backup is {age:.0f}s old, older than max_age {self.from_backup.max_age}")
+        if spec:
+            return {"ok": True}  # new server: nothing running there yet
+        own = self.wf().get("tasks", [])
+        busy = [t for t in (await settle(self.api.running_tasks())) if t.get("task_id", t.get("id")) not in own]
+        if busy:
+            raise FcError(f"{len(busy)} task(s) already running on the target", fix="wait for them to finish")
+        if not self.allow_existing_sites:
+            others = [s for s in (await settle(self.api.bench_sites())) if not (s == self.site and self._own_site())]
+            if others:
+                raise FcError(f"target bench already has sites {others}",
+                              why="known platform blocker flow_server (14 Q1)",
+                              fix="use an empty bench or pass allow_existing_sites=True")
+        return {"ok": True}
+
+    async def _quota(self, spec: ServerSpec):
+        try:
+            t = await settle(self.api.trust_tier()) or {}
+        except FcError:
+            return
+        # shape verified against the live API (current{tier,max_spend,max_resource_count},
+        # spending_limit, running_monthly, progress{resources_used}); tiers Beginner..Elite (sequence 0-5)
+        cur = t.get("current") or {}
+        lim = t.get("spending_limit", cur.get("max_spend"))
+        used = t.get("running_monthly", 0)
+        if lim is not None and spec.price is not None and float(used or 0) + spec.price > float(lim):
+            raise QuotaExceeded(f"plan {spec.plan} (price {spec.price}) exceeds trust-tier spend headroom "
+                                f"({used} of {lim} used)")
+        rl, rc = cur.get("max_resource_count"), (t.get("progress") or {}).get("resources_used")
+        if rl is not None and rc is not None and int(rc) >= int(rl):
+            raise QuotaExceeded(f"trust tier resource limit reached ({rc}/{rl})")
+
+    async def _s_server(self):
+        spec = self.server
+        if not isinstance(spec, ServerSpec):
+            return {"skipped": True}
+        existing = self.wf().get("server_resource")
+        if not existing:
+            r = (await settle(self.api.create_server(spec, self.workflow_id)))  # request_key == workflow_id: safe resend
+            existing = (r or {}).get("resource_id") or (r or {}).get("name") or (r or {}).get("message")
+            self._save(lambda w: w.update(server_resource=existing))
+        (await settle(self.api.wait_server(existing)))
+        if self.pilot_factory:
+            self.pilot = self.pilot_factory(existing)
+            if hasattr(self.api, "pilot"):
+                self.api.pilot = self.pilot
+        return {"resource_id": existing}
+
+    async def _task(self, resp):
+        tid = task_id_of(resp)
+        if tid:
+            self._save(lambda w: w.setdefault("tasks", []).append(tid))
+            (await settle(self.api.wait_task(tid)))
+        return tid
+
+    async def _s_bench_apps(self):
+        present = set((await settle(self.api.bench_apps())))
+        added = []
+        for a in self.bench_apps:
+            a = a if isinstance(a, AppSource) else AppSource(name=a)
+            if a.app_name in present:
+                continue
+            await self._task((await settle(self.api.add_app(a.spec()))))
+            added.append(a.app_name)
+            present.add(a.app_name)
+        if self.manifest:
+            bad = self.manifest.check((await settle(self.api.bench_apps())))
+            if bad:
+                raise ManifestMismatch("bench apps do not match template manifest: " + "; ".join(bad))
+        return {"added": added}
+
+    async def _s_create_site(self):
+        key = f"{self.workflow_id}-create-site"
+        cs = self._created()
+        info = (await settle(self.api.get_site(self.site)))
+        if info is not None:
+            if cs.get("site") == self.site and cs.get("task_id"):
+                return {"adopted": True}
+            if cs.get("site") == self.site and cs.get("idem_key"):
+                resp = (await settle(self.api.create_site(self.site, self.site_apps, key)))  # same key -> same task
+                tid = await self._task(resp)
+                self._mark_created(tid)
+                return {"adopted": True, "recovered": True}
+            raise NameConflict(f"site {self.site} already exists and was not created by workflow {self.workflow_id}")
+        self._save(lambda w: w.update(created_site={"site": self.site, "idem_key": key, "at": self.journal.now()}))
+        resp = (await settle(self.api.create_site(self.site, self.site_apps, key)))
+        tid = task_id_of(resp)
+        self._mark_created(tid)
+        if tid:
+            self._save(lambda w: w.setdefault("tasks", []).append(tid))
+            (await settle(self.api.wait_task(tid)))
+        return {"task_id": tid}
+
+    def _mark_created(self, tid):
+        def f(w):
+            cs = w.setdefault("created_site", {"site": self.site})
+            cs["task_id"] = tid or cs.get("task_id") or "unknown"
+            cs.setdefault("at", self.journal.now())
+        self._save(f)
+
+    async def _apply_isolation(self):
+        (await settle(self.api.set_maintenance(self.site, True)))
+        cfg = (await settle(self.api.site_config(self.site))) or {}
+        if int(cfg.get("maintenance_mode", 0) or 0) != 1 or int(cfg.get("pause_scheduler", 0) or 0) != 1:
+            (await settle(self.api.patch_config(self.site, {"maintenance_mode": 1, "pause_scheduler": 1})))
+            cfg = (await settle(self.api.site_config(self.site))) or {}
+        if int(cfg.get("maintenance_mode", 0) or 0) != 1 or int(cfg.get("pause_scheduler", 0) or 0) != 1:
+            raise FcError(f"could not verify maintenance_mode=1 and pause_scheduler=1 on {self.site}")
+        (await settle(self.api.patch_config(self.site, {"fcctl_workflow_id": self.workflow_id})))  # convenience marker only
+
+    async def _s_isolate(self):
+        await self._apply_isolation()
+        return {"maintenance": True, "scheduler_paused": True}
+
+    async def _s_restore(self):
+        src = self.from_backup
+        if src is None:
+            return {"skipped": True}
+        if not is_workflow_owned(self.journal, self.workflow_id, self.site, self.journal.now(),
+                                 self.eff.policy if self.eff else "guarded"):
+            raise PolicyDenied(f"restore onto {self.site} is not workflow-owned (5.3); needs guard approval")
+        state = dict(self.wf().get("transfer", {}))
+
+        def progress(done, total, fid):
+            self._save(lambda w: w.__setitem__("transfer", dict(state)))
+
+        resp = (await settle(self.api.restore(src, self.site, state, progress)))
+        self._save(lambda w: w.__setitem__("transfer", dict(state)))
+        tid = await self._task(resp)
+        return {"task_id": tid}
+
+    async def _s_reisolate(self):
+        await self._apply_isolation()
+        return {"reapplied": True}
+
+    def _resolve(self, ref: HookRef):
+        for r in (self.resolver, self._builtin):
+            if r is not None and r.has(ref):
+                return r.resolve(ref)
+        raise UsageError(f"no hook registered for {ref.key}")
+
+    def _ctx(self) -> StepContext:
+        return StepContext(site=self.site, pilot=self.pilot, central=self.central, journal=self.journal,
+                           manifest=self.manifest, admin=self.admin, workflow_id=self.workflow_id,
+                           wait_task=self.api.wait_task)
+
+    async def _s_hooks(self):
+        ctx = self._ctx()
+        n = int(self.wf().get("hooks_done", 0))
+        opened = None
+        declared = self.needs_site_admin or bool((self.manifest.extras if self.manifest else {}).get("needs_site_admin"))
+        try:
+            for i, ref in enumerate(self.hooks):
+                if i < n:
+                    continue
+                if declared and ctx.site_admin is None:  # lazy: only when declared and a hook actually runs
+                    if self.admin is not None:
+                        ctx.site_admin = self.admin
+                    elif self.admin_factory is not None:
+                        ctx.site_admin = opened = await settle(self.admin_factory())
+                await settle(self._resolve(ref)(ctx, **ref.args))
+                self._save(lambda w, i=i: w.__setitem__("hooks_done", i + 1))
+        finally:
+            if opened is not None:
+                await settle(opened.aclose())
+        return {"ran": [h.key for h in self.hooks]}
+
+    async def _s_config(self):
+        if self.config:
+            (await settle(self.api.patch_config(self.site, self.config)))
+        return {"keys": sorted(self.config)}
+
+    async def _s_health(self):
+        checks = self.health_checks or [lambda api, site: api.health(site)]
+        res = []
+        for c in checks:
+            r = await settle(c(self.api, self.site))
+            ok = getattr(r, "ok", r)
+            if not ok:
+                raise FcError(f"health check failed for {self.site}: {getattr(r, 'reasons', r)}")
+            res.append(True)
+        return {"checks": len(res)}
+
+
+def provision_site(*, pilot, journal, site, server=None, central=None, bench_apps=(), site_apps=(),
+                   from_backup=None, manifest=None, hook_resolver=None, post_restore_hooks=(), config=None,
+                   health_checks=None, workflow_id=None, api=None, admin=None, eff=None, source_eff=None,
+                   min_vcpu=MIN_VCPU, allow_existing_sites=False, allow_hook_upgrade=False,
+                   pilot_factory=None, needs_site_admin=False, admin_factory=None) -> ProvisionRun:
+    """Create (or resume, when workflow_id already exists in the journal) a run. Call .wait() to execute."""
+    return ProvisionRun(
+        workflow_id=workflow_id or "wf-" + uuid.uuid4().hex[:10], site=site, journal=journal, pilot=pilot,
+        central=central, api=api, hook_resolver=hook_resolver, manifest=manifest, admin=admin, eff=eff,
+        source_eff=source_eff, health_checks=health_checks, min_vcpu=min_vcpu,
+        allow_existing_sites=allow_existing_sites, allow_hook_upgrade=allow_hook_upgrade,
+        pilot_factory=pilot_factory, server=server, bench_apps=bench_apps, site_apps=site_apps,
+        from_backup=from_backup, post_restore_hooks=post_restore_hooks, config=config,
+        needs_site_admin=needs_site_admin, admin_factory=admin_factory)

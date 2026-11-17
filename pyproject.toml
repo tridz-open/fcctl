@@ -1,0 +1,63 @@
+[project]
+name = "fcctl"
+dynamic = ["version"]
+description = "Unofficial Python client and CLI for the Frappe Cloud dashboard (Central) and Pilot APIs"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Tridz Technologies" }]
+keywords = ["frappe", "frappe-cloud", "erpnext", "cli", "devops", "automation"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Systems Administration",
+]
+dependencies = ["httpx>=0.27", "cryptography>=42"]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.45"]  # DEPRECATED, will be removed
+s3 = ["boto3"]
+yaml = ["pyyaml"]
+dev = ["pytest>=8", "respx", "pyyaml", "hypothesis", "unasync", "ruff"]
+
+[project.urls]
+Homepage = "https://github.com/tridz-dev/fcctl"
+Issues = "https://github.com/tridz-dev/fcctl/issues"
+Changelog = "https://github.com/tridz-dev/fcctl/blob/main/CHANGELOG.md"
+
+[project.scripts]
+fcctl = "fcctl.cli:main"
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.dynamic]
+version = { attr = "fcctl._version.__version__" }
+
+[tool.setuptools.packages.find]
+include = ["fcctl*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+extend-exclude = ["fcctl/_sync"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+ignore = ["E701", "E702", "E731", "E741", "F811"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F841"]

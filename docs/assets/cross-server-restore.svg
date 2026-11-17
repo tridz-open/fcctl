@@ -1,0 +1,56 @@
+<svg viewBox="0 0 946 902" width="900" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }
+  </style>
+  <defs><marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/></marker><marker id="arrow-gray" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker><marker id="arrow-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/></marker><marker id="arrow-pink" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#ec4899"/></marker><marker id="arrow-purple" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#a855f7"/></marker></defs>
+  <rect x="0" y="0" width="946" height="902" fill="#ffffff"/>
+  <path d="M163,96 L 163,880" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <path d="M473,96 L 473,880" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <path d="M783,96 L 783,880" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <rect x="22" y="325" width="902" height="195" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="6,4"/>
+  <text x="32" y="339" font-size="11" fill="#64748b" text-anchor="start">loop [each part]</text>
+  <text x="175" y="339" font-size="10" fill="#64748b" text-anchor="start">each 8 MiB chunk, resumable via state file</text>
+  <rect x="22" y="580" width="902" height="252" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="6,4"/>
+  <text x="32" y="594" font-size="11" fill="#64748b" text-anchor="start">alt</text>
+  <text x="175" y="594" font-size="10" fill="#64748b" text-anchor="start">[owned_by_workflow passes ownership check]</text>
+  <path d="M22,668 L 924,668" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <text x="32" y="687" font-size="11" fill="#64748b" text-anchor="start">else</text>
+  <text x="175" y="687" font-size="10" fill="#64748b" text-anchor="start">[not workflow-owned]</text>
+  <path d="M168,130 L 462,130" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M468,170 L 174,170" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <path d="M168,190 C 208,192 208,224 174,224" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M168,265 L 772,265" fill="none" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <path d="M778,305 L 174,305" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <path d="M168,380 L 462,380" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M468,420 L 174,420" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <path d="M168,460 L 772,460" fill="none" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <path d="M778,500 L 174,500" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <path d="M168,640 L 772,640" fill="none" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <path d="M168,712 C 208,714 208,746 174,746" fill="none" stroke="#ec4899" stroke-width="1.5" marker-end="url(#arrow-pink)"/>
+  <path d="M168,815 L 772,815" fill="none" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <path d="M778,865 L 174,865" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <text x="473" y="32" font-size="16" fill="#1e293b" text-anchor="middle">Cross-server restore: server A to server B</text>
+  <rect x="22" y="55" width="282" height="36" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="163" y="77.2" font-size="12" fill="#1e40af" text-anchor="middle">Caller</text>
+  <rect x="332" y="55" width="282" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="473" y="77.2" font-size="12" fill="#b45309" text-anchor="middle">Source Pilot (server A)</text>
+  <rect x="642" y="55" width="282" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="783" y="77.2" font-size="12" fill="#6b21a8" text-anchor="middle">Target Pilot (server B)</text>
+  <text x="318" y="116" font-size="10" fill="#1e293b" text-anchor="middle">GET /sites/SRC/backups/TS</text>
+  <text x="318" y="156" font-size="10" fill="#1e293b" text-anchor="middle">files (filename, size) per part</text>
+  <text x="215" y="201" font-size="10" fill="#1e293b" text-anchor="start">classify files into</text>
+  <text x="215" y="213" font-size="10" fill="#1e293b" text-anchor="start">database, public, private</text>
+  <text x="628" y="251" font-size="10" fill="#1e293b" text-anchor="middle">POST /sites/DST/uploads {files: filename + size}</text>
+  <text x="628" y="291" font-size="10" fill="#1e293b" text-anchor="middle">upload_id</text>
+  <text x="318" y="366" font-size="10" fill="#1e293b" text-anchor="middle">GET .../backups/TS/files/FILE/content, Range bytes</text>
+  <text x="318" y="406" font-size="10" fill="#1e293b" text-anchor="middle">206 chunk</text>
+  <text x="628" y="446" font-size="10" fill="#1e293b" text-anchor="middle">PUT /sites/DST/uploads/ID/files/PART?offset=N</text>
+  <text x="628" y="486" font-size="10" fill="#1e293b" text-anchor="middle">ok</text>
+  <text x="318" y="548" font-size="10" fill="#1e293b" text-anchor="middle">upload_only stops here.</text>
+  <text x="318" y="560" font-size="10" fill="#1e293b" text-anchor="middle">The target site is untouched.</text>
+  <text x="628" y="626" font-size="10" fill="#1e293b" text-anchor="middle">POST /sites/DST/actions/restore {parts, upload_id}</text>
+  <text x="215" y="729" font-size="10" fill="#1e293b" text-anchor="start">guard files PendingApproval (exit 7)</text>
+  <text x="318" y="772" font-size="10" fill="#1e293b" text-anchor="middle">a second person approves, then restore runs</text>
+  <text x="628" y="801" font-size="10" fill="#1e293b" text-anchor="middle">POST /sites/DST/actions/restore (Idempotency-Key)</text>
+  <text x="628" y="851" font-size="10" fill="#1e293b" text-anchor="middle">task id, wait via GET /tasks</text>
+</svg>

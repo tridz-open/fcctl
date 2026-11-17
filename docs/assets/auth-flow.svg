@@ -1,0 +1,59 @@
+<svg viewBox="0 0 936 905" width="900" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }
+  </style>
+  <defs><marker id="arrow-blue" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#3b82f6"/></marker><marker id="arrow-gray" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker><marker id="arrow-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/></marker><marker id="arrow-purple" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#a855f7"/></marker></defs>
+  <rect x="0" y="0" width="936" height="905" fill="#ffffff"/>
+  <path d="M123,96 L 123,885" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <path d="M353,96 L 353,885" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <path d="M583,96 L 583,885" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <path d="M813,96 L 813,885" fill="none" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4,4"/>
+  <rect x="22" y="715" width="892" height="165" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="6,4"/>
+  <text x="32" y="729" font-size="11" fill="#64748b" text-anchor="start">alt</text>
+  <text x="135" y="729" font-size="10" fill="#64748b" text-anchor="start">[Pilot answers 401]</text>
+  <path d="M128,130 L 342,130" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M358,170 L 572,170" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M578,210 L 134,210" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <path d="M128,250 L 342,250" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M358,290 L 572,290" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M578,330 L 364,330" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <path d="M358,350 C 398,352 398,384 364,384" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M128,470 L 342,470" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M358,510 L 572,510" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M578,550 L 364,550" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <path d="M358,570 C 398,572 398,604 364,604" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M358,655 L 802,655" fill="none" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <path d="M808,695 L 364,695" fill="none" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-green)"/>
+  <path d="M358,745 C 398,747 398,779 364,779" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M358,820 L 572,820" fill="none" stroke="#3b82f6" stroke-width="1.5" marker-end="url(#arrow-blue)"/>
+  <path d="M358,860 L 802,860" fill="none" stroke="#a855f7" stroke-width="1.5" marker-end="url(#arrow-purple)"/>
+  <text x="468" y="32" font-size="16" fill="#1e293b" text-anchor="middle">Auth flow: email code to Pilot JWT</text>
+  <rect x="22" y="55" width="202" height="36" rx="6" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="123" y="77.2" font-size="12" fill="#1e40af" text-anchor="middle">User</text>
+  <rect x="252" y="55" width="202" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="353" y="77.2" font-size="12" fill="#b45309" text-anchor="middle">fcctl</text>
+  <rect x="482" y="55" width="202" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="583" y="77.2" font-size="12" fill="#6b21a8" text-anchor="middle">Central API</text>
+  <rect x="712" y="55" width="202" height="36" rx="6" fill="#d1fae5" stroke="#22c55e" stroke-width="1.5"/>
+  <text x="813" y="77.2" font-size="12" fill="#166534" text-anchor="middle">Pilot gateway</text>
+  <text x="238" y="116" font-size="10" fill="#1e293b" text-anchor="middle">fcctl auth login</text>
+  <text x="468" y="156" font-size="10" fill="#1e293b" text-anchor="middle">POST auth.send_code {email}</text>
+  <text x="468" y="196" font-size="10" fill="#1e293b" text-anchor="middle">6-digit code by email</text>
+  <text x="238" y="236" font-size="10" fill="#1e293b" text-anchor="middle">enter code (prompt/--code-stdin/IMAP)</text>
+  <text x="468" y="276" font-size="10" fill="#1e293b" text-anchor="middle">POST auth.verify_code {email, code}</text>
+  <text x="468" y="316" font-size="10" fill="#1e293b" text-anchor="middle">Set-Cookie sid, csrf_token</text>
+  <text x="405" y="361" font-size="10" fill="#1e293b" text-anchor="start">SessionStore.set_central</text>
+  <text x="405" y="373" font-size="10" fill="#1e293b" text-anchor="start">(Fernet, session.enc)</text>
+  <text x="468" y="412" font-size="10" fill="#1e293b" text-anchor="middle">later Central calls send cookie sid</text>
+  <text x="468" y="424" font-size="10" fill="#1e293b" text-anchor="middle">+ X-Frappe-CSRF-Token</text>
+  <text x="238" y="456" font-size="10" fill="#1e293b" text-anchor="middle">any server or site command</text>
+  <text x="468" y="496" font-size="10" fill="#1e293b" text-anchor="middle">GET sso.get_bench_link?server=ID</text>
+  <text x="468" y="536" font-size="10" fill="#1e293b" text-anchor="middle">url = gateway/?sid=JWT</text>
+  <text x="405" y="581" font-size="10" fill="#1e293b" text-anchor="start">split url: JWT + gateway</text>
+  <text x="405" y="593" font-size="10" fill="#1e293b" text-anchor="start">memory cache, max_age 120 s</text>
+  <text x="698" y="641" font-size="10" fill="#1e293b" text-anchor="middle">/api/v1/... Authorization: Bearer JWT</text>
+  <text x="698" y="681" font-size="10" fill="#1e293b" text-anchor="middle">data</text>
+  <text x="405" y="762" font-size="10" fill="#1e293b" text-anchor="start">invalidate cached JWT</text>
+  <text x="468" y="806" font-size="10" fill="#1e293b" text-anchor="middle">get_bench_link again (single-flight)</text>
+  <text x="698" y="846" font-size="10" fill="#1e293b" text-anchor="middle">retry with new JWT</text>
+</svg>

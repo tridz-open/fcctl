@@ -1,0 +1,165 @@
+"""Stable high-level facade (client.sites / servers / backups / workflows). Written once, async-native.
+
+The sync twin is generated. Everything is async-native (fcctl._async.backups / workflows) over the
+client's own central/pilot clients; no thread shims.
+"""
+from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from ..facade_types import BackupSource
+from ..errors import DiskShrinkRefused, PolicyDenied, UsageError
+from . import siteadmin as _siteadmin
+
+M = "central.api.servers."
+RESTORE_PARTS = ("database", "public", "private", "config")
+
+
+def _disk(d) -> float | None:
+    if not isinstance(d, dict):
+        return None
+    for v in (d.get("disk"), (d.get("plan") or {}).get("disk") if isinstance(d.get("plan"), dict) else None):
+        if isinstance(v, (int, float)):
+            return float(v)
+    return None
+
+
+def _journal():
+    from ..journal import Journal
+    return Journal(Path(os.environ.get("FCCTL_HOME") or Path.home() / ".fcctl") / "journal")
+
+
+def _check_owned(workflow_id, site, journal, policy, what):
+    from .workflows.provision import is_workflow_owned
+    j = journal or _journal()
+    if not is_workflow_owned(j, workflow_id, site, j.now(), policy):
+        raise PolicyDenied(f"{what} on {site} is not owned by workflow {workflow_id}")
+
+
+class Sites:
+    def __init__(self, client):
+        self._c = client
+
+    async def _set(self, server, site, on):
+        return await self._c.pilot(server).patch(
+            f"/sites/{site}/configuration", {"maintenance_mode": int(on), "pause_scheduler": int(on)})
+
+    async def suspend(self, server: str, site: str):
+        """maintenance_mode=1 and pause_scheduler=1 (PATCH site configuration, sync, no task)."""
+        return await self._set(server, site, True)
+
+    async def resume(self, server: str, site: str):
+        return await self._set(server, site, False)
+
+    async def create(self, server: str, name: str, apps: list[str], idempotency_key: str | None = None):
+        """Create a site (Pilot POST /sites); returns the 202 task dict. Same call provision uses."""
+        from . import sites
+        return await sites.create_site(self._c.pilot(server), name, list(apps), key=idempotency_key)
+
+    async def list(self, server: str):
+        from . import sites
+        return await sites.list_sites(self._c.pilot(server))
+
+    async def login_link(self, server: str, site: str):
+        """Pilot POST /sites/<site>/login -> response (contains the login url)."""
+        return await self._c.pilot(server).post(f"/sites/{site}/login")
+
+    async def drop(self, server: str, site: str, owned_by_workflow: str | None = None, journal=None,
+                   policy: str = "guarded", no_backup: bool = False):
+        """DESTRUCTIVE. Guarded (PendingApproval) unless owned_by_workflow passes the ownership check
+        (journal shows that workflow created `site`); a non-passing owned_by_workflow raises PolicyDenied."""
+        p = self._c.pilot(server)
+        if owned_by_workflow:
+            _check_owned(owned_by_workflow, site, journal, policy, "drop")
+            from . import sites
+            return await sites.drop_site(p, site, no_backup=no_backup)
+        from .. import sites as legacy
+        return legacy.drop_site(p, site, no_backup=no_backup)
+
+    async def admin(self, server: str, site: str):
+        """Open an Administrator SiteAdminClient (mints a Pilot login link). Caller must `await aclose()`."""
+        return await _siteadmin.open_admin(self._c, server, site)
+
+
+class Servers:
+    def __init__(self, client):
+        self._c = client
+
+    async def resize(self, server: str, plan: str, **extra):
+        """POST resize_server; refuses a disk shrink (DiskShrinkRefused) when both disks are known."""
+        c = self._c.central
+        cur = _disk(await c.call("GET", M + "server_overview", params={"resource_id": server}))
+        plans = await c.call("GET", "central.api.images.eligible_plans", params={"region": "bom"})
+        if isinstance(plans, dict):
+            plans = plans.get("plans") or []
+        new = next((_disk(p) for p in plans or [] if isinstance(p, dict) and plan in (p.get("name"), p.get("plan"))),
+                   None)
+        if cur is not None and new is not None and new < cur:
+            raise DiskShrinkRefused(f"plan {plan} disk {new:g}GB < current {cur:g}GB; disk shrink is not allowed")
+        return await c.call("POST", M + "resize_server", json={"resource_id": server, "plan": plan, **extra})
+
+
+class Backups:
+    def __init__(self, client):
+        self._c = client
+
+    async def download_links(self, server: str, site: str, ts: str):
+        return await self._c.pilot(server).get(f"/sites/{site}/backups/{ts}/download-links")
+
+    async def restore(self, server: str, site: str, from_upload=None, from_site_backup=None,
+                      owned_by_workflow: str | None = None, journal=None, policy: str = "guarded",
+                      skip_failing_patches: bool = False):
+        """Overwrites `site`. Guarded (returns PendingApproval) unless owned_by_workflow passes D11
+        (journal shows that workflow created `site`); a non-passing owned_by_workflow raises PolicyDenied.
+
+        from_upload: upload_id str or {"upload_id", "parts"}; from_site_backup: {"server","site","ts"[,"parts"]}.
+        """
+        if bool(from_upload) == bool(from_site_backup):
+            raise UsageError("pass exactly one of from_upload / from_site_backup")
+        p = self._c.pilot(server)
+        if owned_by_workflow:
+            _check_owned(owned_by_workflow, site, journal, policy, "restore")
+        if from_upload:
+            u = {"upload_id": from_upload} if isinstance(from_upload, str) else dict(from_upload)
+            parts = list(u.get("parts") or RESTORE_PARTS)
+            if owned_by_workflow:
+                body = {"parts": parts, "skip_failing_patches": skip_failing_patches, "upload_id": u["upload_id"]}
+                return await p.post(f"/sites/{site}/actions/restore", body)
+            from .. import backups as legacy
+            return legacy.restore(p, site, parts=tuple(parts), upload_id=u["upload_id"],
+                                  skip_failing_patches=skip_failing_patches)
+        s = dict(from_site_backup)
+        from . import backups as core
+        src = self._c.pilot(s["server"])
+        kw = {"skip_failing_patches": skip_failing_patches}
+        if s.get("parts"):
+            kw["parts"] = tuple(s["parts"])
+        if owned_by_workflow:
+            return await core.restore_from_site_backup(src, s["site"], s["ts"], p, site,
+                                                       owned_by_workflow=owned_by_workflow, **kw)
+        from .. import backups as legacy
+        up = await core.upload_from_site_backup(src, s["site"], s["ts"], p, site, **kw)
+        return legacy.restore(p, site, parts=tuple(up["parts"]), upload_id=up["upload_id"],
+                              skip_failing_patches=skip_failing_patches)
+
+
+class Workflows:
+    def __init__(self, client):
+        self._c = client
+
+    async def provision_site(self, *, server: str, site: str, from_backup=None, journal=None, **kw):
+        """Build a ProvisionRun (not yet executed); `await run.wait()` on the async client, `run.wait()` on the sync one.
+
+        from_backup: facade BackupSource(profile, server, site, ts) or a workflows.types backup source."""
+        from .workflows import provision
+        from .workflows.types import BackupSource as WfBackup
+        central, pilot = self._c.central, self._c.pilot(server)
+        if isinstance(from_backup, BackupSource):
+            src_pilot = self._c.pilot(from_backup.server)
+            kw.setdefault("api", provision.LiveApi(pilot, central, source_pilot=src_pilot))
+            from_backup = WfBackup(from_backup.profile, from_backup.site, from_backup.ts, from_backup.max_age)
+        if kw.get("needs_site_admin"):
+            kw.setdefault("admin_factory", lambda: self._c.sites.admin(server, site))
+        return provision.provision_site(pilot=pilot, central=central, journal=journal or _journal(),
+                                        site=site, from_backup=from_backup, **kw)

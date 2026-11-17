@@ -1,0 +1,80 @@
+"""profile: list / show / create / use / set / delete."""
+from __future__ import annotations
+
+import dataclasses
+
+
+def _row(p, current=None):
+    d = dataclasses.asdict(p)
+    d["allow"] = list(p.allow)
+    d["current"] = p.name == current
+    return d
+
+
+def list_(ctx, args):
+    cur = ctx.profiles.current()
+    return [_row(p, cur) for p in ctx.profiles.list()]
+
+
+def show(ctx, args):
+    from .. import config
+    p = ctx.profiles.get(args.name) if args.name else ctx.profile
+    row = _row(p, ctx.profiles.current())
+    row["effective_policy"] = dataclasses.asdict(config.effective_policy(p, ctx.profiles.list()))
+    row["effective_policy"]["allow"] = sorted(row["effective_policy"]["allow"])
+    row["effective_policy"]["warnings"] = list(row["effective_policy"]["warnings"])
+    row["effective_policy"]["profiles"] = list(row["effective_policy"]["profiles"])
+    return row
+
+
+def create(ctx, args):
+    from ..profiles import Profile
+    p = Profile(args.name, args.email, args.team, args.policy, tuple(args.allow or ()), args.session_ref)
+    return _row(ctx.profiles.create(p))
+
+
+def use(ctx, args):
+    ctx.profiles.use(args.name)
+    return {"current": args.name}
+
+
+def set_(ctx, args):
+    from ..profiles import Profile
+    old = ctx.profiles.get(args.name)
+    ch = {}
+    if args.email:
+        ch["login"] = args.email
+    for k in ("team", "policy", "session_ref"):
+        if getattr(args, k):
+            ch[k] = getattr(args, k)
+    if args.allow is not None:
+        ch["allow"] = tuple(args.allow)
+    return _row(ctx.profiles.set(Profile(**{**dataclasses.asdict(old), **ch})))
+
+
+def delete(ctx, args):
+    from ..errors import UsageError
+    if not (args.yes or args.confirm in (True, args.name)):
+        raise UsageError("confirmation required", what=f"refusing to delete profile {args.name!r}",
+                         why="deleting a profile is irreversible", fix="re-run with --yes")
+    ctx.profiles.delete(args.name)
+    return {"deleted": args.name}
+
+
+def register(sub, common):
+    g = sub.add_parser("profile", help="manage profiles", parents=[common])
+    gs = g.add_subparsers(dest="profile_cmd", required=True)
+    gs.add_parser("list", parents=[common]).set_defaults(func=list_)
+    x = gs.add_parser("show", parents=[common]); x.add_argument("name", nargs="?"); x.set_defaults(func=show)
+    x = gs.add_parser("create", parents=[common])
+    x.add_argument("name"); x.add_argument("--email", required=True); x.add_argument("--team", required=True)
+    x.add_argument("--policy", default="guarded", choices=["full", "guarded", "read_only", "protected"])
+    x.add_argument("--allow", action="append"); x.add_argument("--session-ref")
+    x.set_defaults(func=create)
+    x = gs.add_parser("use", parents=[common]); x.add_argument("name"); x.set_defaults(func=use)
+    x = gs.add_parser("set", parents=[common])
+    x.add_argument("name"); x.add_argument("--email"); x.add_argument("--team")
+    x.add_argument("--policy", choices=["full", "guarded", "read_only", "protected"])
+    x.add_argument("--allow", action="append"); x.add_argument("--session-ref")
+    x.set_defaults(func=set_)
+    x = gs.add_parser("delete", parents=[common]); x.add_argument("name"); x.set_defaults(func=delete)

@@ -1,0 +1,55 @@
+<svg viewBox="0 0 910 401" width="900" xmlns="http://www.w3.org/2000/svg">
+  <style>
+    text { font-family: 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', system-ui, sans-serif; }
+  </style>
+  <defs><marker id="arrow-amber" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#f59e0b"/></marker><marker id="arrow-gray" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#64748b"/></marker><marker id="arrow-green" markerWidth="8" markerHeight="8" refX="2" refY="4" orient="auto" markerUnits="userSpaceOnUse"><path d="M0,0 L8,4 L0,8 L2,4 z" fill="#22c55e"/></marker></defs>
+  <rect x="0" y="0" width="910" height="401" fill="#ffffff"/>
+  <rect x="310" y="50" width="578" height="76" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="6,4"/>
+  <text x="320" y="64" font-size="11" fill="#64748b" text-anchor="start">Steps 1-4: a failure leaves the workflow running</text>
+  <rect x="22" y="175" width="866" height="76" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-dasharray="6,4"/>
+  <text x="32" y="189" font-size="11" fill="#64748b" text-anchor="start">Steps 5-10: a failure sets needs_attention</text>
+  <path d="M446,93 L 458,93" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M590,93 L 602,93" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M734,93 L 746,93" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M752,218 L 740,218" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M608,218 L 596,218" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M464,218 L 452,218" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M320,218 L 308,218" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M176,218 L 164,218" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M815,116 L 815,189" fill="none" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow-gray)"/>
+  <path d="M305,93 L 164,93" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-amber)"/>
+  <path d="M95,241 L 95,289" fill="none" stroke="#22c55e" stroke-width="1.5" marker-end="url(#arrow-green)"/>
+  <path d="M542,256 L 542,329" fill="none" stroke="#f59e0b" stroke-width="1.5" stroke-dasharray="6,4" marker-end="url(#arrow-amber)"/>
+  <text x="455" y="32" font-size="16" fill="#1e293b" text-anchor="middle">provision_site: the ten steps</text>
+  <rect x="325" y="75" width="116" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="383" y="97.2" font-size="12" fill="#b45309" text-anchor="middle">1 preflight</text>
+  <rect x="469" y="75" width="116" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="527" y="97.2" font-size="12" fill="#b45309" text-anchor="middle">2 server</text>
+  <rect x="613" y="75" width="116" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="671" y="97.2" font-size="12" fill="#b45309" text-anchor="middle">3 bench_apps</text>
+  <rect x="757" y="75" width="116" height="36" rx="6" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="815" y="97.2" font-size="12" fill="#b45309" text-anchor="middle">4 create_site</text>
+  <rect x="757" y="200" width="116" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="815" y="222.2" font-size="12" fill="#6b21a8" text-anchor="middle">5 isolate</text>
+  <rect x="613" y="200" width="116" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="671" y="222.2" font-size="12" fill="#6b21a8" text-anchor="middle">6 restore</text>
+  <rect x="469" y="200" width="116" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="527" y="222.2" font-size="12" fill="#6b21a8" text-anchor="middle">7 reisolate</text>
+  <rect x="325" y="200" width="116" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="383" y="222.2" font-size="12" fill="#6b21a8" text-anchor="middle">8 hooks</text>
+  <rect x="181" y="200" width="116" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="239" y="222.2" font-size="12" fill="#6b21a8" text-anchor="middle">9 config</text>
+  <rect x="37" y="200" width="116" height="36" rx="6" fill="#f3e8ff" stroke="#a855f7" stroke-width="1.5"/>
+  <text x="95" y="222.2" font-size="12" fill="#6b21a8" text-anchor="middle">10 health</text>
+  <rect x="37" y="75" width="116" height="36" rx="18" fill="#dbeafe" stroke="#3b82f6" stroke-width="1.5"/>
+  <text x="95" y="97.2" font-size="12" fill="#1e40af" text-anchor="middle">running</text>
+  <text x="234" y="78" font-size="10" fill="#1e293b" text-anchor="middle">steps 1-4 fail</text>
+  <text x="234" y="112" font-size="10" fill="#1e293b" text-anchor="middle">re-run with</text>
+  <text x="234" y="124" font-size="10" fill="#1e293b" text-anchor="middle">--workflow-id</text>
+  <rect x="37" y="300" width="116" height="36" rx="18" fill="#d1fae5" stroke="#22c55e" stroke-width="2.5"/>
+  <text x="95" y="322.2" font-size="12" fill="#166534" text-anchor="middle">succeeded</text>
+  <text x="107" y="272" font-size="10" fill="#1e293b" text-anchor="start">all ten steps ok</text>
+  <rect x="472" y="340" width="140" height="36" rx="18" fill="#fef3c7" stroke="#f59e0b" stroke-width="1.5"/>
+  <text x="542" y="362.2" font-size="12" fill="#b45309" text-anchor="middle">needs_attention</text>
+  <text x="554" y="296" font-size="10" fill="#1e293b" text-anchor="start">any of steps 5-10 fails</text>
+</svg>
