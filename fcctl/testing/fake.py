@@ -410,6 +410,9 @@ class FakeFrappeCloud:
             return self._site(c, sm.group(1), sm.group(2) or "", body)
         if path == "/apps" and meth == "GET":
             return _resp(200, {"apps": self.apps})
+        if path == "/git/repository-resolutions" and meth == "POST":
+            nm = body.get("repo", "").rstrip("/").removesuffix(".git").rsplit("/", 1)[-1]
+            return _resp(200, {"name": nm} if nm else {"message": "cannot resolve repository"})
         if path == "/apps" and meth == "POST":
             self.apps.append({"name": body.get("name") or body.get("repo")})
             return self._start(c, self.new_task("app_add"))

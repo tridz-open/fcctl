@@ -85,3 +85,37 @@ def test_check_updates_result_parses_last_line(r, p):
 
 def test_policy_check_updates_is_post():
     assert policy.REGISTRY["app.check_updates"].get("method") == "POST"
+
+
+def test_add_repo_resolves_name(r, p):
+    res = ok(r, "post", "/git/repository-resolutions", {"name": "ury"})
+    add = ok(r, "post", "/apps", {"task_id": "t"})
+    apps.add_repo(p, "https://github.com/o/ury", "main")
+    assert json.loads(res.calls[0].request.content) == {"repo": "https://github.com/o/ury", "branch": "main"}
+    assert json.loads(add.calls[0].request.content) == {
+        "name": "ury", "repo": "https://github.com/o/ury", "branch": "main", "sites": []}
+    assert [c.request.url.path for c in r.calls] == [
+        "/api/v1/git/repository-resolutions", "/api/v1/apps"]
+
+
+def test_add_repo_name_override_skips_resolution(r, p):
+    res = ok(r, "post", "/git/repository-resolutions", {"name": "x"})
+    add = ok(r, "post", "/apps", {"task_id": "t"})
+    apps.add_repo(p, "R", "b", ["s"], name="mine")
+    assert not res.called
+    assert json.loads(add.calls[0].request.content) == {"name": "mine", "repo": "R", "branch": "b", "sites": ["s"]}
+
+
+def test_add_repo_resolution_error(r, p):
+    ok(r, "post", "/git/repository-resolutions", {"message": "no app found"})
+    add = ok(r, "post", "/apps", {})
+    with pytest.raises(Exception, match="no app found"):
+        apps.add_repo(p, "R", "main")
+    assert not add.called
+
+
+def test_add_in_order_repo_spec(r, p):
+    ok(r, "post", "/git/repository-resolutions", {"name": "ury"})
+    add = ok(r, "post", "/apps", {})
+    apps.add_in_order(p, [{"repo": "R", "branch": "main"}])
+    assert json.loads(add.calls[0].request.content) == {"name": "ury", "repo": "R", "branch": "main", "sites": []}

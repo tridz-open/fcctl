@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..errors import ApiError
 from . import tasks
 from .pilot import PilotClient
 
@@ -44,8 +45,17 @@ def add_marketplace(p: PilotClient, name: str, sites: list[str] | None = None):
     return p.post("/apps", {"name": name, **({"sites": sites} if sites else {})})
 
 
-def add_repo(p: PilotClient, repo: str, branch: str, sites: list[str] | None = None):
-    return p.post("/apps", {"repo": repo, "branch": branch, **({"sites": sites} if sites else {})})
+def add_repo(p: PilotClient, repo: str, branch: str, sites: list[str] | None = None,
+                   name: str | None = None):
+    """Clone a repo into the bench. The app name comes from Pilot's repository resolution
+    (what the dashboard does) unless `name` is given, which skips the resolution."""
+    if not name:
+        res = p.post("/git/repository-resolutions", {"repo": repo, "branch": branch})
+        name = res.get("name") if isinstance(res, dict) else None
+        if not name:
+            msg = (res.get("message") or res.get("error") or res) if isinstance(res, dict) else res
+            raise ApiError(f"could not resolve an app name for {repo}@{branch}: {msg}", body=res)
+    return p.post("/apps", {"name": name, "repo": repo, "branch": branch, "sites": sites or []})
 
 
 def _task_id(resp: Any) -> str | None:
@@ -59,7 +69,7 @@ def add_in_order(p: PilotClient, specs: list[dict], **wait_kw):
     wait_kw: timeout/poll (sleeping goes through _io)."""
     out = []
     for s in specs:
-        start = (lambda s=s: add_repo(p, s["repo"], s.get("branch", "main")) if "repo" in s
+        start = (lambda s=s: add_repo(p, s["repo"], s.get("branch", "main"), name=s.get("name")) if "repo" in s
                  else add_marketplace(p, s["name"]))
         resp = tasks.retry_conflict(start)
         tid = _task_id(resp)
