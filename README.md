@@ -155,15 +155,15 @@ fcctl app add --repo https://github.com/you/your_app --branch main -s server-xxx
 **Provision a customer site (preview first)**
 
 ```bash
-fcctl site provision acme.bom.frappe.cloud -s server-xxxx \
+fcctl site provision acme.example.com -s server-xxxx \
   --app erpnext --app hrms --dry-run       # shows the plan, changes nothing
-fcctl site provision acme.bom.frappe.cloud -s server-xxxx --app erpnext --app hrms
+fcctl site provision acme.example.com -s server-xxxx --app erpnext --app hrms
 ```
 
 **Back up before a risky change, and wait on long tasks**
 
 ```bash
-fcctl backup create acme.bom.frappe.cloud -s server-xxxx   # waits by default
+fcctl backup create acme.example.com -s server-xxxx   # waits by default
 fcctl task list -s server-xxxx -o json | jq '.[0] | {command, status}'
 fcctl task output TASK_ID -s server-xxxx   # full log of a failed task
 ```
@@ -171,7 +171,7 @@ fcctl task output TASK_ID -s server-xxxx   # full log of a failed task
 **Script it: JSON out, exit codes in**
 
 ```bash
-if ! fcctl site get acme.bom.frappe.cloud -s server-xxxx -o json > site.json; then
+if ! fcctl site get acme.example.com -s server-xxxx -o json > site.json; then
   echo "lookup failed with exit $?"   # 3 auth, 5 not found, 10 Cloudflare challenge ...
 fi
 ```
