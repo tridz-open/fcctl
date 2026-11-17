@@ -227,3 +227,13 @@ def test_app_add_with_site_routes_to_site_install(ready, capsys, monkeypatch):
 def test_app_check_updates_cli(ready, capsys):
     rc, out, _ = run(capsys, "app", "check-updates", *S)
     assert rc == 0 and "erpnext" in json.loads(out)
+
+
+def test_site_rename_cli(ready, capsys, monkeypatch):
+    from fcctl import sites
+    calls = []
+    monkeypatch.setattr(sites, "rename_site", lambda p, *a: calls.append(a) or {})
+    rc, _, _ = run(capsys, "site", "rename", "a.x.com", "b.x.com", *S)
+    assert rc == 0 and calls == [("a.x.com", "b.x.com", False)]
+    rc, _, _ = run(capsys, "site", "rename", "a.x.com", "c.x.com", "--keep-old-hostname", *S)
+    assert rc == 0 and calls[-1] == ("a.x.com", "c.x.com", True)

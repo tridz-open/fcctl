@@ -145,3 +145,9 @@ def test_add_marketplace_unknown_app_raises(r, p):
     with pytest.raises(UsageError):
         apps.add_marketplace(p, "nope")
     assert not add.called
+
+
+def test_rename_site_body(r, p):
+    route = ok(r, "post", "/sites/s/actions/rename", {"task_id": "t"})
+    sites.rename_site(p, "s", "n.example")
+    assert json.loads(route.calls.last.request.content) == {"new_name": "n.example", "keep_old_hostname": False}

@@ -71,9 +71,9 @@ async def drop_site(p: PilotClient, site: str, no_backup: bool = False):
     return await p.request("DELETE", f"/sites/{site}", params={"no_backup": "1"} if no_backup else None)
 
 
-async def rename_site(p: PilotClient, site: str, new_name: str, keep_old_hostname=False, make_primary=True):
+async def rename_site(p: PilotClient, site: str, new_name: str, keep_old_hostname=False):
     return await p.post(f"/sites/{site}/actions/rename",
-                  {"name": new_name, "keep_old_hostname": keep_old_hostname, "make_primary": make_primary})
+                        {"new_name": new_name, "keep_old_hostname": keep_old_hostname})
 
 
 # ---- v1 additions

@@ -8,6 +8,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `fcctl app add NAME --site S` (repeatable) fetches and installs NAME on each site via `POST /sites/{site}/apps {"app": NAME}`, the same call the dashboard makes. When the app isn't on the bench yet, Pilot runs `get-and-install-app`, which avoids the bench `get-app` validator that rejects apps such as india_compliance.
 
 ### Fixed
+- `sites.rename_site` now posts `{"new_name", "keep_old_hostname"}` (Pilot reads `new_name`; the old `name`/`make_primary` body was ignored); `make_primary` is dropped. New CLI `fcctl site rename SITE NEW [--keep-old-hostname]` (guarded write, op `site.rename`).
 - `logs.content` with `lines` now tails via `GET /logs/{f}?lines=N` (joined with newlines) instead of silently downloading the whole file; without `lines` it still downloads `/content`.
 - `transfer` now reads `size_bytes` (legacy `size` still accepted) and classifies parts by `kind` (`database`, `public-file`, `private-file`) with a filename fallback, fixing KeyError in cross-server restore and `provision --from-backup`. The fake backup listing uses the live shape.
 - `apps.add_marketplace` with `sites` now installs per site (`POST /sites/{site}/apps {"app"}`) and never posts `/apps`; without sites it resolves `GET /marketplace/apps` (UsageError if missing or not installable) and posts `{name, repo, branch, sites: []}`. `app add` help recommends `--site`.

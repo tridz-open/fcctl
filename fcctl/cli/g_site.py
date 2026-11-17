@@ -95,6 +95,16 @@ def s_drop(ctx, args):
     return follow(ctx, args, res, "site.drop", site=args.site)
 
 
+def s_rename(ctx, args):
+    from .. import ops, sites
+    from .g_task import follow
+    p = ctx.pilot()
+    res = ops.run_op("site.rename", args.site,
+                     lambda: sites.rename_site(p, args.site, args.new_name, args.keep_old_hostname),
+                     ctx=ctx.op_context("pilot"))
+    return follow(ctx, args, res, "site.rename", site=args.site)
+
+
 def s_login(ctx, args):
     from .. import ops, sites
     p = ctx.pilot()
@@ -161,6 +171,9 @@ def register(sub, common):
     x.set_defaults(func=s_provision)
     x = g.add_parser("drop", parents=[common], help="drop a site (guarded)"); x.add_argument("site")
     x.add_argument("--no-backup", action="store_true"); x.set_defaults(func=s_drop)
+    x = g.add_parser("rename", parents=[common], help="rename a site (guarded)"); x.add_argument("site")
+    x.add_argument("new_name", metavar="NEW"); x.add_argument("--keep-old-hostname", action="store_true")
+    x.set_defaults(func=s_rename)
     x = g.add_parser("login", parents=[common]); x.add_argument("site"); x.add_argument("--hint")
     x.set_defaults(func=s_login)
     x = g.add_parser("maintenance", parents=[common]); x.add_argument("site"); x.add_argument("state", choices=["on", "off"])
