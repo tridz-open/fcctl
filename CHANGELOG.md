@@ -5,6 +5,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 ## [Unreleased]
 
 ### Added
+- Pilot contract guard: `tests/test_pilot_contract.py` checks every public Pilot call (method, path, body and query keys) against the dashboard API extracted by `scripts/extract_pilot_contract.py` (`just contract-refresh`, weekly `contract-refresh` workflow diffs it), plus a fake-conformance check; `DELETE /apps/{}` (`remove_app`) is allowlisted as unverified (P8).
 - `--dry-run` now also prints the request that would be sent (`request`: method, path, params, body; `requests` lists all, max 10) for write ops; existing keys are unchanged and nothing is written.
 - `fcctl app add NAME --site S` (repeatable) fetches and installs NAME on each site via `POST /sites/{site}/apps {"app": NAME}`, the same call the dashboard makes. When the app isn't on the bench yet, Pilot runs `get-and-install-app`, which avoids the bench `get-app` validator that rejects apps such as india_compliance.
 

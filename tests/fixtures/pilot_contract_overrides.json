@@ -1,0 +1,22 @@
+{
+ "_comment": "Hand-maintained additions to pilot_dashboard_contract.json. The extractor marks bodies and queries built from a variable as <dynamic>; the keys below come from the dashboard call sites. '*' means any key.",
+ "body_keys": {
+  "POST /apps": ["name", "repo", "branch", "sites"],
+  "POST /sites/{}/apps": ["app"],
+  "POST /sites": ["name", "apps"],
+  "POST /updates": ["apps", "disable_safeguards"],
+  "POST /sites/{}/actions/restore": ["parts", "skip_failing_patches", "source_site", "backup_timestamp", "upload_id", "frappe_cloud_backup", "remote_site", "password"],
+  "PUT /sites/{}/backup-schedule": ["schedule", "retention"],
+  "PATCH /sites/{}/configuration": ["*"]
+ },
+ "query_keys": {
+  "DELETE /sites/{}/apps/{}": ["remove_from_bench", "force", "mode"],
+  "GET /tasks": ["status"],
+  "DELETE /sites/{}": ["no_backup"],
+  "GET /sites/{}/backups": ["limit"]
+ },
+ "responses": {
+  "GET /sites/{}/backups/{}": {"files[]": ["filename", "kind", "size_bytes"]},
+  "GET /logs/{}": {"": ["filename", "lines"]}
+ }
+}
