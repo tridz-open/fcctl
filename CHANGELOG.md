@@ -8,6 +8,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `fcctl app add NAME --site S` (repeatable) fetches and installs NAME on each site via `POST /sites/{site}/apps {"app": NAME}`, the same call the dashboard makes. When the app isn't on the bench yet, Pilot runs `get-and-install-app`, which avoids the bench `get-app` validator that rejects apps such as india_compliance.
 
 ### Fixed
+- Pilot path segments (site, app, log, task, backup timestamp) are now percent-encoded via `pilot.seg`, so names with `/` or spaces cannot alter the route; URL-safe names are unchanged. `monitor_status` docstring now reads "monitor log sources".
 - `provision` preflight `running_tasks` now lists `/tasks` without a status filter and keeps `queued` and `running` tasks (queued tasks were missed; `pending` is not a Pilot status).
 - `backups.set_schedule` always sends `retention`: when none is given it reads the current schedule first and echoes its retention, so a PUT can no longer reset it.
 - `sites.rename_site` now posts `{"new_name", "keep_old_hostname"}` (Pilot reads `new_name`; the old `name`/`make_primary` body was ignored); `make_primary` is dropped. New CLI `fcctl site rename SITE NEW [--keep-old-hostname]` (guarded write, op `site.rename`).

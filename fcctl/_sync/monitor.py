@@ -23,4 +23,5 @@ def health(p: PilotClient):
 
 
 def monitor_status(p: PilotClient):
+    """Monitor log sources."""
     return p.get("/monitor/status")

@@ -5,6 +5,8 @@ client's own central/pilot clients; no thread shims.
 """
 from __future__ import annotations
 
+from .pilot import seg
+
 import os
 from pathlib import Path
 
@@ -43,7 +45,7 @@ class Sites:
 
     async def _set(self, server, site, on):
         return await self._c.pilot(server).patch(
-            f"/sites/{site}/configuration", {"maintenance_mode": int(on), "pause_scheduler": int(on)})
+            f"/sites/{seg(site)}/configuration", {"maintenance_mode": int(on), "pause_scheduler": int(on)})
 
     async def suspend(self, server: str, site: str):
         """maintenance_mode=1 and pause_scheduler=1 (PATCH site configuration, sync, no task)."""
@@ -63,7 +65,7 @@ class Sites:
 
     async def login_link(self, server: str, site: str):
         """Pilot POST /sites/<site>/login -> response (contains the login url)."""
-        return await self._c.pilot(server).post(f"/sites/{site}/login")
+        return await self._c.pilot(server).post(f"/sites/{seg(site)}/login")
 
     async def drop(self, server: str, site: str, owned_by_workflow: str | None = None, journal=None,
                    policy: str = "guarded", no_backup: bool = False):
@@ -105,7 +107,7 @@ class Backups:
         self._c = client
 
     async def download_links(self, server: str, site: str, ts: str):
-        return await self._c.pilot(server).get(f"/sites/{site}/backups/{ts}/download-links")
+        return await self._c.pilot(server).get(f"/sites/{seg(site)}/backups/{seg(ts)}/download-links")
 
     async def restore(self, server: str, site: str, from_upload=None, from_site_backup=None,
                       owned_by_workflow: str | None = None, journal=None, policy: str = "guarded",
@@ -125,7 +127,7 @@ class Backups:
             parts = list(u.get("parts") or RESTORE_PARTS)
             if owned_by_workflow:
                 body = {"parts": parts, "skip_failing_patches": skip_failing_patches, "upload_id": u["upload_id"]}
-                return await p.post(f"/sites/{site}/actions/restore", body)
+                return await p.post(f"/sites/{seg(site)}/actions/restore", body)
             from .. import backups as legacy
             return legacy.restore(p, site, parts=tuple(parts), upload_id=u["upload_id"],
                                   skip_failing_patches=skip_failing_patches)

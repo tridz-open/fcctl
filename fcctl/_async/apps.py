@@ -5,7 +5,7 @@ from typing import Any
 
 from ..errors import ApiError, UsageError
 from . import sites as _sites, tasks
-from .pilot import PilotClient
+from .pilot import seg, PilotClient
 
 # Apps that need another app on the bench first, or Pilot's import validation fails.
 DEFAULT_DEPS: dict[str, list[str]] = {"hrms": ["erpnext"]}
@@ -96,7 +96,7 @@ async def check_updates(p: PilotClient):
 async def check_updates_result(p: PilotClient, task_id: str):
     """Parse the last non-empty line of the task output as JSON ({app: {...}})."""
     import json
-    out = await p.get(f"/tasks/{task_id}/output/content")
+    out = await p.get(f"/tasks/{seg(task_id)}/output/content")
     if isinstance(out, dict):
         out = out.get("content", "")
     lines = [ln for ln in str(out or "").splitlines() if ln.strip()]
@@ -114,12 +114,12 @@ async def update_apps(p: PilotClient, apps: list[str] | None = None, disable_saf
 
 
 async def switch_branch(p: PilotClient, name: str, branch: str):
-    return await p.post(f"/apps/{name}/actions/switch-branch", {"branch": branch})
+    return await p.post(f"/apps/{seg(name)}/actions/switch-branch", {"branch": branch})
 
 
 async def remove_app(p: PilotClient, name: str):
     """Remove an app -> remove-app task."""
-    return await p.delete(f"/apps/{name}")
+    return await p.delete(f"/apps/{seg(name)}")
 
 
 OPS = {"remove_app": "app.remove", "list_apps": "app.list", "remove": "app.remove"}

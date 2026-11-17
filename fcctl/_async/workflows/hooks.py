@@ -2,6 +2,8 @@
 must be idempotent (re-run after a crash). The journal stores names/versions/args only, never code."""
 from __future__ import annotations
 
+from ..pilot import seg
+
 import base64
 import os
 from typing import Any, Callable
@@ -61,7 +63,7 @@ async def _wait(ctx: StepContext, resp) -> None:
 
 async def _patch_config(ctx: StepContext, cfg: dict) -> None:
     # local adapter: PATCH /sites/<s>/configuration (same route sites.set_maintenance uses)
-    await settle(ctx.pilot.patch(f"/sites/{ctx.site}/configuration", cfg))
+    await settle(ctx.pilot.patch(f"/sites/{seg(ctx.site)}/configuration", cfg))
 
 
 async def set_config(ctx, config: dict | None = None, **kw):

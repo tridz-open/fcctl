@@ -4,23 +4,23 @@ from __future__ import annotations
 
 from ..errors import UsageError
 from . import transfer
-from .pilot import PilotClient
+from .pilot import seg, PilotClient
 
 
 def create(p: PilotClient, site: str):
-    return p.post(f"/sites/{site}/backups")
+    return p.post(f"/sites/{seg(site)}/backups")
 
 
 def list_backups(p: PilotClient, site: str, limit: int = 20):
-    return p.get(f"/sites/{site}/backups", limit=limit)
+    return p.get(f"/sites/{seg(site)}/backups", limit=limit)
 
 
 def get(p: PilotClient, site: str, timestamp: str):
-    return p.get(f"/sites/{site}/backups/{timestamp}")
+    return p.get(f"/sites/{seg(site)}/backups/{seg(timestamp)}")
 
 
 def download_links(p: PilotClient, site: str, timestamp: str):
-    return p.get(f"/sites/{site}/backups/{timestamp}/download-links")
+    return p.get(f"/sites/{seg(site)}/backups/{seg(timestamp)}/download-links")
 
 
 def restore(p: PilotClient, site: str, parts=("database", "public", "private", "config"),
@@ -33,18 +33,18 @@ def restore(p: PilotClient, site: str, parts=("database", "public", "private", "
         body["backup_timestamp"] = backup_timestamp
     if upload_id:
         body["upload_id"] = upload_id
-    return p.post(f"/sites/{site}/actions/restore", body)
+    return p.post(f"/sites/{seg(site)}/actions/restore", body)
 
 
 def get_schedule(p: PilotClient, site: str):
-    return p.get(f"/sites/{site}/backup-schedule")
+    return p.get(f"/sites/{seg(site)}/backup-schedule")
 
 
 def set_schedule(p: PilotClient, site: str, cron: str = "0 2 * * *", retention: dict | None = None):
     if retention is None:
-        current = p.get(f"/sites/{site}/backup-schedule")
+        current = p.get(f"/sites/{seg(site)}/backup-schedule")
         retention = current.get("retention") if isinstance(current, dict) else None
-    return p.put(f"/sites/{site}/backup-schedule", {"schedule": cron, "retention": retention})
+    return p.put(f"/sites/{seg(site)}/backup-schedule", {"schedule": cron, "retention": retention})
 
 
 # ---- v1 additions
@@ -53,7 +53,7 @@ OPS = {"offsite_list": "backup.offsite_list", "offsite_download": "backup.offsit
 
 
 def offsite_list(p: PilotClient, site: str):
-    return p.get(f"/sites/{site}/integrations/frappe-cloud/backups")
+    return p.get(f"/sites/{seg(site)}/integrations/frappe-cloud/backups")
 
 
 def download_file(p: PilotClient, site: str, timestamp: str, file_id: str, dest: str):

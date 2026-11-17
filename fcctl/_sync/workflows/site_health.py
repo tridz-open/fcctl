@@ -7,7 +7,7 @@ import httpx
 from ..._version import USER_AGENT
 from ...errors import FcError, NotFound
 from ...health import (BAD_STATUS, HEALTHY, HEALTHY_MAINT, PROVISIONING, HealthResult)  # noqa: F401
-from ..pilot import PilotClient
+from ..pilot import seg, PilotClient
 
 
 def _get(http: httpx.Client, url: str) -> int | None:
@@ -22,7 +22,7 @@ def check_site_health(pilot: PilotClient, site: str, http: httpx.Client | None =
     res = HealthResult(site)
     why = res.reasons
     try:
-        info = pilot.get(f"/sites/{site}")
+        info = pilot.get(f"/sites/{seg(site)}")
     except NotFound:
         why.append("site not found in Pilot")
         return res
@@ -41,7 +41,7 @@ def check_site_health(pilot: PilotClient, site: str, http: httpx.Client | None =
         why.append(f"site still provisioning ({status})")
     if task_id:
         try:
-            t = pilot.get(f"/tasks/{task_id}")
+            t = pilot.get(f"/tasks/{seg(task_id)}")
             res.task_status = str((t or {}).get("status", "")).lower() or None
             if res.task_status in ("failed", "killed"):
                 why.append(f"task {task_id} {res.task_status}")

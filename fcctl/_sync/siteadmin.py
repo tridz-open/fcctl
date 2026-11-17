@@ -6,6 +6,8 @@ errors and reprs.
 """
 from __future__ import annotations
 
+from .pilot import seg
+
 import hashlib
 import json as _json
 import re
@@ -264,7 +266,7 @@ def open_admin(client: Any, server: str, site: str, *, http: httpx.Client | None
     `client` is a PilotClient (has .post) or a facade exposing .pilot(server).
     """
     pilot = client if hasattr(client, "post") else client.pilot(server)
-    data = pilot.post(f"/sites/{site}/login")
+    data = pilot.post(f"/sites/{seg(site)}/login")
     link = _link_from(data)
     u = urlparse(link)
     root = base or f"{u.scheme}://{u.netloc}"

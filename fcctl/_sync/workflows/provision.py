@@ -8,6 +8,8 @@ All remote calls go through a small `Api` adapter (LiveApi wraps the existing fc
 """
 from __future__ import annotations
 
+from ..pilot import seg
+
 import uuid
 from typing import Callable
 
@@ -100,7 +102,7 @@ class LiveApi:
         return info.get("config") or info
 
     def patch_config(self, site, cfg):
-        return self.pilot.patch(f"/sites/{site}/configuration", cfg)
+        return self.pilot.patch(f"/sites/{seg(site)}/configuration", cfg)
 
     def backup_age(self, src: BackupSource):
         return None

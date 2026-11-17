@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Iterator
 
-from .pilot import PilotClient
+from .pilot import seg, PilotClient
 from .tasks import stream_events
 
 
@@ -14,9 +14,9 @@ def list_logs(p: PilotClient):
 
 def content(p: PilotClient, filename: str, lines: int | None = None):
     if lines:
-        resp = p.get(f"/logs/{filename}", lines=lines)
+        resp = p.get(f"/logs/{seg(filename)}", lines=lines)
         return "\n".join(resp["lines"])
-    r = p.request("GET", f"/logs/{filename}/content", raw=True)
+    r = p.request("GET", f"/logs/{seg(filename)}/content", raw=True)
     r.raise_for_status()
     return r.text
 
@@ -24,7 +24,7 @@ def content(p: PilotClient, filename: str, lines: int | None = None):
 def tail(p: PilotClient, filename: str) -> Iterator[str]:
     """SSE, yields lines; never ends on its own."""
     import json
-    for d in stream_events(p, f"/logs/{filename}/events"):
+    for d in stream_events(p, f"/logs/{seg(filename)}/events"):
         try:
             j = json.loads(d)
             yield j.get("line", d) if isinstance(j, dict) and "error" not in j else str(j)
@@ -33,4 +33,4 @@ def tail(p: PilotClient, filename: str) -> Iterator[str]:
 
 
 def task_events(p: PilotClient, task_id: str) -> Iterator[str]:
-    return stream_events(p, f"/tasks/{task_id}/events")
+    return stream_events(p, f"/tasks/{seg(task_id)}/events")

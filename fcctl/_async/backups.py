@@ -3,23 +3,23 @@ from __future__ import annotations
 
 from ..errors import UsageError
 from . import transfer
-from .pilot import PilotClient
+from .pilot import seg, PilotClient
 
 
 async def create(p: PilotClient, site: str):
-    return await p.post(f"/sites/{site}/backups")
+    return await p.post(f"/sites/{seg(site)}/backups")
 
 
 async def list_backups(p: PilotClient, site: str, limit: int = 20):
-    return await p.get(f"/sites/{site}/backups", limit=limit)
+    return await p.get(f"/sites/{seg(site)}/backups", limit=limit)
 
 
 async def get(p: PilotClient, site: str, timestamp: str):
-    return await p.get(f"/sites/{site}/backups/{timestamp}")
+    return await p.get(f"/sites/{seg(site)}/backups/{seg(timestamp)}")
 
 
 async def download_links(p: PilotClient, site: str, timestamp: str):
-    return await p.get(f"/sites/{site}/backups/{timestamp}/download-links")
+    return await p.get(f"/sites/{seg(site)}/backups/{seg(timestamp)}/download-links")
 
 
 async def restore(p: PilotClient, site: str, parts=("database", "public", "private", "config"),
@@ -32,18 +32,18 @@ async def restore(p: PilotClient, site: str, parts=("database", "public", "priva
         body["backup_timestamp"] = backup_timestamp
     if upload_id:
         body["upload_id"] = upload_id
-    return await p.post(f"/sites/{site}/actions/restore", body)
+    return await p.post(f"/sites/{seg(site)}/actions/restore", body)
 
 
 async def get_schedule(p: PilotClient, site: str):
-    return await p.get(f"/sites/{site}/backup-schedule")
+    return await p.get(f"/sites/{seg(site)}/backup-schedule")
 
 
 async def set_schedule(p: PilotClient, site: str, cron: str = "0 2 * * *", retention: dict | None = None):
     if retention is None:
-        current = await p.get(f"/sites/{site}/backup-schedule")
+        current = await p.get(f"/sites/{seg(site)}/backup-schedule")
         retention = current.get("retention") if isinstance(current, dict) else None
-    return await p.put(f"/sites/{site}/backup-schedule", {"schedule": cron, "retention": retention})
+    return await p.put(f"/sites/{seg(site)}/backup-schedule", {"schedule": cron, "retention": retention})
 
 
 # ---- v1 additions
@@ -52,7 +52,7 @@ OPS = {"offsite_list": "backup.offsite_list", "offsite_download": "backup.offsit
 
 
 async def offsite_list(p: PilotClient, site: str):
-    return await p.get(f"/sites/{site}/integrations/frappe-cloud/backups")
+    return await p.get(f"/sites/{seg(site)}/integrations/frappe-cloud/backups")
 
 
 async def download_file(p: PilotClient, site: str, timestamp: str, file_id: str, dest: str):
