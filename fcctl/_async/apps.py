@@ -67,7 +67,23 @@ async def add_in_order(p: PilotClient, specs: list[dict], **wait_kw):
 
 
 async def check_updates(p: PilotClient):
-    return await p.post("/app-update-checks")
+    """Start a fetch-all-app-updates task (bench-wide git fetch); returns {task_id}."""
+    return await p.post("/apps/fetch")
+
+
+async def check_updates_result(p: PilotClient, task_id: str):
+    """Parse the last non-empty line of the task output as JSON ({app: {...}})."""
+    import json
+    out = await p.get(f"/tasks/{task_id}/output/content")
+    if isinstance(out, dict):
+        out = out.get("content", "")
+    lines = [ln for ln in str(out or "").splitlines() if ln.strip()]
+    if not lines:
+        return {}
+    try:
+        return json.loads(lines[-1])
+    except ValueError:
+        return {}
 
 
 async def update_apps(p: PilotClient, apps: list[str] | None = None, disable_safeguards: bool = False):

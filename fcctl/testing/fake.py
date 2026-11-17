@@ -413,6 +413,13 @@ class FakeFrappeCloud:
         if path == "/apps" and meth == "POST":
             self.apps.append({"name": body.get("name") or body.get("repo")})
             return self._start(c, self.new_task("app_add"))
+        if path == "/apps/fetch" and meth == "POST":
+            return self._start(c, self.new_task("fetch_all_app_updates", _output=_json.dumps(
+                {a["name"]: {"has_update": False} for a in self.apps}) + "\n"))
+        om = re.match(r"/tasks/([^/]+)/output/content$", path)
+        if om and meth == "GET":
+            t = self.tasks.get(om.group(1))
+            return _resp(200, {"content": t.get("_output", "")}) if t else _pilot_err(404, "not_found")
         if path == "/tasks" and meth == "GET":
             return _resp(200, {"tasks": [self._public_task(t) for t in self.tasks.values()]})
         tm = re.match(r"/tasks/([^/]+)(/events)?$", path)

@@ -63,6 +63,18 @@ def a_uninstall(ctx, args):
     return follow(ctx, args, res, "site.uninstall_app", site=args.site)
 
 
+def a_check_updates(ctx, args):
+    from .. import apps, ops
+    from .g_task import follow, wants_wait
+    p = ctx.pilot()
+    res = ops.run_op("app.check_updates", "apps", lambda: apps.check_updates(p), ctx=ctx.op_context("pilot"))
+    done = follow(ctx, args, res, "app.check_updates")
+    tid = res.get("task_id") if isinstance(res, dict) else None
+    if not tid or not wants_wait(args) or (isinstance(res, dict) and res.get("dry_run")):
+        return done
+    return apps.check_updates_result(p, tid)
+
+
 def register(sub, common):
     g = sub.add_parser("app", parents=[common], help="bench / site apps").add_subparsers(dest="app_cmd", required=True)
     x = g.add_parser("list", parents=[common]); x.add_argument("--site"); x.set_defaults(func=a_list)
@@ -73,6 +85,8 @@ def register(sub, common):
     x.set_defaults(func=a_add)
     x = g.add_parser("remove", parents=[common], help="remove an app from the bench (guarded)")
     x.add_argument("name"); x.set_defaults(func=a_remove)
+    x = g.add_parser("check-updates", parents=[common], help="git-fetch every bench app and show which have updates")
+    x.set_defaults(func=a_check_updates)
     x = g.add_parser("install", parents=[common], help="install an app on a site")
     x.add_argument("name", nargs="?"); x.add_argument("--site", required=True)
     x.add_argument("--repo"); x.add_argument("--branch")

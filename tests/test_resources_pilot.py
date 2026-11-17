@@ -69,3 +69,19 @@ def test_ops_ids_known_to_policy():
     assert all("." in m for m in missing)
     for mod in (servers, sites, objects, apps, backups, taskops, billing, notifications, infra, domains, activity):
         assert all(callable(getattr(mod, fn)) for fn in mod.OPS)
+
+
+def test_check_updates_path(r, p):
+    fetch = ok(r, "post", "/apps/fetch", {"task_id": "t"})
+    old = ok(r, "post", "/app-update-checks", {})
+    assert apps.check_updates(p) == {"task_id": "t"}
+    assert fetch.calls[0].request.method == "POST" and not old.called
+
+
+def test_check_updates_result_parses_last_line(r, p):
+    ok(r, "get", "/tasks/t/output/content", {"content": 'x\n{"erpnext":{"has_update":true}}\n'})
+    assert apps.check_updates_result(p, "t") == {"erpnext": {"has_update": True}}
+
+
+def test_policy_check_updates_is_post():
+    assert policy.REGISTRY["app.check_updates"].get("method") == "POST"

@@ -222,3 +222,8 @@ def test_app_add_with_site_routes_to_site_install(ready, capsys, monkeypatch):
     assert run(capsys, "app", "add", "india_compliance", "--site", "a.x.com", "--site", "b.x.com", *S)[0] == 0
     assert calls == [("a.x.com", "india_compliance", None, None),
                      ("b.x.com", "india_compliance", None, None)]
+
+
+def test_app_check_updates_cli(ready, capsys):
+    rc, out, _ = run(capsys, "app", "check-updates", *S)
+    assert rc == 0 and "erpnext" in json.loads(out)
