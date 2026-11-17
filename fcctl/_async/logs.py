@@ -12,7 +12,10 @@ async def list_logs(p: PilotClient):
 
 
 async def content(p: PilotClient, filename: str, lines: int | None = None):
-    r = await p.request("GET", f"/logs/{filename}/content", params={"lines": lines} if lines else None, raw=True)
+    if lines:
+        resp = await p.get(f"/logs/{filename}", lines=lines)
+        return "\n".join(resp["lines"])
+    r = await p.request("GET", f"/logs/{filename}/content", raw=True)
     r.raise_for_status()
     return r.text
 

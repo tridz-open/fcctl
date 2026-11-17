@@ -441,6 +441,11 @@ class FakeFrappeCloud:
             return _resp(200, self._public_task(t))
         if path == "/logs":
             return _resp(200, {"logs": [{"name": n, "has_errors": False} for n in self.logs]})
+        jm = re.match(r"/logs/([^/]+)$", path)
+        if jm and jm.group(1) in self.logs:
+            all_lines = self.logs[jm.group(1)].splitlines()
+            n = int(c.params.get("lines", len(all_lines)))
+            return _resp(200, {"filename": jm.group(1), "lines": all_lines[-n:] if n else []})
         lm = re.match(r"/logs/([^/]+)/(content|events)$", path)
         if lm and lm.group(1) in self.logs:
             if lm.group(2) == "content":

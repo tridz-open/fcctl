@@ -119,3 +119,20 @@ def test_rate_limit(fake_fc):
     with pytest.raises(RateLimited) as e:
         sites.list_sites(p)
     assert e.value.status == 429
+
+
+def test_logs_content_with_lines_uses_json_tail(fake_fc):
+    from fcctl import logs
+    p = fake_fc.pilot()
+    fake_fc.logs["f"] = "a\nb\nc\nd\n"
+    assert logs.content(p, "f", 3) == "b\nc\nd"
+    paths = [c.path for c in fake_fc.calls]
+    assert "/api/v1/logs/f" in paths and "/api/v1/logs/f/content" not in paths
+
+
+def test_logs_content_without_lines_downloads(fake_fc):
+    from fcctl import logs
+    p = fake_fc.pilot()
+    fake_fc.logs["f"] = "a\nb\n"
+    assert logs.content(p, "f") == "a\nb\n"
+    assert "/api/v1/logs/f/content" in [c.path for c in fake_fc.calls]

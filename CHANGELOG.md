@@ -8,6 +8,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `fcctl app add NAME --site S` (repeatable) fetches and installs NAME on each site via `POST /sites/{site}/apps {"app": NAME}`, the same call the dashboard makes. When the app isn't on the bench yet, Pilot runs `get-and-install-app`, which avoids the bench `get-app` validator that rejects apps such as india_compliance.
 
 ### Fixed
+- `logs.content` with `lines` now tails via `GET /logs/{f}?lines=N` (joined with newlines) instead of silently downloading the whole file; without `lines` it still downloads `/content`.
 - `transfer` now reads `size_bytes` (legacy `size` still accepted) and classifies parts by `kind` (`database`, `public-file`, `private-file`) with a filename fallback, fixing KeyError in cross-server restore and `provision --from-backup`. The fake backup listing uses the live shape.
 - `apps.add_marketplace` with `sites` now installs per site (`POST /sites/{site}/apps {"app"}`) and never posts `/apps`; without sites it resolves `GET /marketplace/apps` (UsageError if missing or not installable) and posts `{name, repo, branch, sites: []}`. `app add` help recommends `--site`.
 - `apps.add_repo` (and `add_in_order` repo specs) now resolve the app name via `POST /git/repository-resolutions` before `POST /apps`, instead of sending no name (which made the repo URL the app name and failed get-app); an explicit `name=` skips the resolution.
