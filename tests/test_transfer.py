@@ -14,7 +14,10 @@ DB = b"D" * 25
 PUB = b"P" * 10
 PRIV = b"V" * 7
 FILES = {"a-database.sql.gz": DB, "a-files.tar": PUB, "a-private-files.tar": PRIV, "a-config.json": b"{}"}
-META = {"files": [{"filename": k, "size": len(v)} for k, v in FILES.items()]}
+KINDS = {"a-database.sql.gz": "database", "a-files.tar": "public-file",
+         "a-private-files.tar": "private-file", "a-config.json": "config"}
+META = {"files": [{"filename": k, "kind": KINDS[k], "path": "/x/" + k, "size_bytes": len(v)}
+                  for k, v in FILES.items()]}
 
 
 @pytest.fixture(autouse=True)
@@ -154,3 +157,22 @@ def test_wrapper_workflow_owned_restores(clients):
     up, puts, rs = mock_dst(respx)
     wrapped(src, "s", TS, dst, "d", chunk_size=100, owned_by_workflow="wf-1")
     assert rs.called
+
+
+@respx.mock
+def test_transfer_accepts_legacy_size_key(clients, monkeypatch):
+    src, dst = clients
+    legacy = {"files": [{"filename": k, "size": len(v)} for k, v in FILES.items()]}
+    monkeypatch.setitem(globals(), "META", legacy)
+    mock_src(respx)
+    up, puts, rs = mock_dst(respx)
+    assert restore_from_site_backup(src, "s", TS, dst, "d", chunk_size=10) == {"task": "t1"}
+    assert json.loads(up.calls[0].request.content)["files"]["database"]["size"] == 25
+
+
+def test_classify_by_kind():
+    from fcctl._async.transfer import _part
+    assert _part({"filename": "weird.bin", "kind": "private-file"}) == "private"
+    assert _part({"filename": "weird.bin", "kind": "public-file"}) == "public"
+    assert _part({"filename": "x-database.sql.gz", "kind": "config"}) == "database"
+    assert _part({"filename": "a-private-files.tar"}) == "private"

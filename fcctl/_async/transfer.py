@@ -21,11 +21,29 @@ PART_SUFFIX = (("private", "-private-files.tar"), ("public", "-files.tar"), ("da
 class TransferError(FcError): ...
 
 
+KIND_PART = {"database": "database", "public-file": "public", "private-file": "private"}
+
+
 def classify(filename: str) -> str | None:
     for part, suffix in PART_SUFFIX:  # private before public: "-private-files.tar" also ends "-files.tar"
         if filename.endswith(suffix):
             return part
     return None
+
+
+def _size(f: dict) -> int:
+    """Live backup listings carry size_bytes; accept the legacy size key as a fallback."""
+    v = f.get("size_bytes", f.get("size"))
+    if v is None:
+        raise TransferError(f"backup file {f.get('filename')!r} has no size_bytes")
+    return int(v)
+
+
+def _part(f: dict) -> str | None:
+    kind = f.get("kind")
+    if kind in KIND_PART:
+        return KIND_PART[kind]
+    return classify(f.get("filename", ""))
 
 
 async def _auth(p: PilotClient) -> tuple[dict, str]:
@@ -96,7 +114,7 @@ async def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup
     files = (meta.get("files") if isinstance(meta, dict) else None) or []
     chosen: dict[str, dict] = {}
     for f in files:
-        part = classify(f.get("filename", ""))
+        part = _part(f)
         if part in parts:
             chosen[part] = f
     missing = [p for p in parts if p not in chosen]
@@ -105,18 +123,18 @@ async def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup
 
     st, save = _load(state)
     if st.get("dst_site") != dst_site or st.get("timestamp") != backup_timestamp or "upload_id" not in st:
-        body = {"files": {p: {"filename": chosen[p]["filename"], "size": int(chosen[p]["size"])} for p in parts}}
+        body = {"files": {p: {"filename": chosen[p]["filename"], "size": _size(chosen[p])} for p in parts}}
         up = raise_for_pilot(await _call(dst_pilot, "POST", f"/sites/{dst_site}/uploads", json=body, **kw))
         st.clear()
         st.update(upload_id=up["upload_id"], dst_site=dst_site, timestamp=backup_timestamp, done={})
         save()
     uid, done = st["upload_id"], st.setdefault("done", {})
 
-    total = sum(int(chosen[p]["size"]) for p in parts)
-    sent = sum(min(int(done.get(p, 0)), int(chosen[p]["size"])) for p in parts)
+    total = sum(_size(chosen[p]) for p in parts)
+    sent = sum(min(int(done.get(p, 0)), _size(chosen[p])) for p in parts)
     for part in parts:
         f = chosen[part]
-        size, fid = int(f["size"]), f["filename"]
+        size, fid = _size(f), f["filename"]
         src_path = f"/sites/{src_site}/backups/{backup_timestamp}/files/{fid}/content"
         off = int(done.get(part, 0))
         while off < size:

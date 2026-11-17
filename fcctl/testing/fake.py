@@ -372,7 +372,7 @@ class FakeFrappeCloud:
             self.sites[t["site"]]["status"] = "active"
         elif t["type"] == "backup":
             self.backups[t["site"]].append({"timestamp": t["timestamp"], "status": "success",
-                                            "files": [{"id": "database", "name": "db.sql.gz"}]})
+                                            "files": [{"filename": "db.sql.gz", "kind": "database", "path": "/x/db.sql.gz", "size_bytes": 1}]})
 
     def _accept(self, c: Call, t: dict) -> httpx.Response:
         return _resp(202, {"task_id": t["task_id"], "status": t["status"]})
@@ -499,7 +499,7 @@ class FakeFrappeCloud:
             if not b:
                 return _pilot_err(404, "backup_not_found")
             if bm.group(2):
-                return _resp(200, {"links": {f["id"]: f"https://s3.fake.example/{name}/{f['name']}?sig=x"
+                return _resp(200, {"links": {f["kind"]: f"https://s3.fake.example/{name}/{f['filename']}?sig=x"
                                              for f in b["files"]}})
             return _resp(200, b)
         if rest == "/apps" and meth == "POST":
