@@ -35,3 +35,35 @@ def test_async_sites_and_apps():
 def test_async_billing_health():
     r = asyncio.run(billing.billing_health(FakeC()))
     assert r["ok"] is True and r["balance"] == 5
+
+
+class SchedP:
+    def __init__(self):
+        self.calls = []
+        self.put_body = None
+
+    async def get(self, path, **kw):
+        self.calls.append(("GET", path))
+        return {"retention": {"keep_weekly": 4}, "schedule": None}
+
+    async def put(self, path, json=None, **kw):
+        self.calls.append(("PUT", path))
+        self.put_body = json
+        return {}
+
+
+def test_set_schedule_preserves_retention():
+    from fcctl._async import backups
+    p = SchedP()
+    asyncio.run(backups.set_schedule(p, "a.x", "0 2 * * *"))
+    assert ("GET", "/sites/a.x/backup-schedule") in p.calls
+    assert p.put_body == {"schedule": "0 2 * * *", "retention": {"keep_weekly": 4}}
+
+
+def test_set_schedule_explicit_retention_no_get():
+    from fcctl._async import backups
+    p = SchedP()
+    r = {"keep_weekly": 2}
+    asyncio.run(backups.set_schedule(p, "a.x", "0 2 * * *", r))
+    assert not any(c[0] == "GET" for c in p.calls)
+    assert p.put_body == {"schedule": "0 2 * * *", "retention": r}

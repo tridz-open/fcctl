@@ -41,7 +41,10 @@ def get_schedule(p: PilotClient, site: str):
 
 
 def set_schedule(p: PilotClient, site: str, cron: str = "0 2 * * *", retention: dict | None = None):
-    return p.put(f"/sites/{site}/backup-schedule", {"schedule": cron, **({"retention": retention} if retention else {})})
+    if retention is None:
+        current = p.get(f"/sites/{site}/backup-schedule")
+        retention = current.get("retention") if isinstance(current, dict) else None
+    return p.put(f"/sites/{site}/backup-schedule", {"schedule": cron, "retention": retention})
 
 
 # ---- v1 additions
