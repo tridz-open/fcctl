@@ -148,7 +148,7 @@ GAP: in-place server restore from snapshot (clone only).
 | sites.create | fcctl site create | POST /sites | bench | | S (stub body) |
 | sites.provision (workflow) | fcctl site provision | composed | bench | | S (restore cross-server open) |
 | sites.drop | fcctl site drop | DELETE /sites/<n> | bench | **G** | S |
-| sites.rename | later | POST /sites/<n>/actions/rename | bench | g | S |
+| sites.rename | fcctl site rename SITE NEW [--keep-old-hostname] | POST /sites/<n>/actions/rename body {new_name, keep_old_hostname} | bench | g | S |
 | sites.clone | fcctl site clone | POST /sites/<n>/actions/clone (keys name, target_bench) | bench | **G** | S |
 | sites.apps.list / install | fcctl app add NAME --site S; fcctl app install --site S NAME | GET/POST /sites/<n>/apps; body {app} (get-and-install-app if not on bench) or {repo, branch} | bench | | S |
 | sites.apps.uninstall | fcctl app remove --site | DELETE /sites/<n>/apps/<app> | bench | **G** | S |
@@ -157,7 +157,7 @@ GAP: in-place server restore from snapshot (clone only).
 | sites.backups.download | fcctl backup download | GET /sites/<n>/backups/<ts>/download-links, /files/<id>/content | bench | | S |
 | sites.backups.delete | later | DELETE /sites/<n>/backups/<ts> | bench | g | S |
 | sites.backups.offsite | fcctl backup offsite | POST /sites/<n>/actions/remote-backups | bench | | S |
-| sites.backups.schedule.get / set / delete | later | GET/PUT/DELETE /sites/<n>/backup-schedule | bench | | S |
+| sites.backups.schedule.get / set / delete | later | GET/PUT/DELETE /sites/<n>/backup-schedule; PUT always sends {schedule, retention} (current retention is fetched when not given) | bench | | S |
 | sites.restore (backup / other site) | fcctl backup restore | POST /sites/<n>/actions/restore | bench | **G** | S |
 | sites.restore_upload; sites.uploads.* | later | POST /sites/<n>/actions/restore-upload; /uploads... | bench | **G** | S |
 | sites.migrate / clear_cache / build_assets | fcctl site migrate / clear-cache | POST /sites/<n>/actions/{migrate,clear-cache,build-assets} | bench | | S |
@@ -170,6 +170,19 @@ GAP: in-place server restore from snapshot (clone only).
 | sites.tasks.get | fcctl task get | GET /sites/<n>/tasks/<id> | bench | | S |
 | sites.integrations.frappe_cloud.* | not in SDK | /sites/<n>/integrations/frappe-cloud* | | | S |
 | sites.central.call | fcctl api | GET/POST /sites/<n>/central/<path> | | g | S |
+
+#### 2.8a Bench apps and parity notes (pilot dashboard contract)
+| SDK | CLI | HTTP | Status |
+|---|---|---|---|
+| apps.add_marketplace (with sites) | fcctl app add NAME --site S | POST /sites/<s>/apps {app} per site (no POST /apps) | S |
+| apps.add_marketplace (bench only) | fcctl app add NAME | GET /marketplace/apps lookup, then POST /apps {name, repo, branch, sites: []} | S |
+| apps.add_repo | fcctl app add --repo URL | POST /git/repository-resolutions {repo, branch} for the name (or `name=`), then POST /apps {name, repo, branch, sites} | S |
+| apps.check_updates / check_updates_result | fcctl app check-updates | POST /apps/fetch (task); result is the last JSON line of /tasks/<id>/output/content | S |
+| apps.remove_app | fcctl app remove | DELETE /apps/<a> (unverified, allowlisted; see FCCTL_PARITY W9) | unverified |
+| logs.content(lines=N) | fcctl logs tail F --lines N | GET /logs/<f>?lines=N (JSON); no lines: GET /logs/<f>/content | S |
+| transfer (restore from site backup) | fcctl backup restore / site provision --from-backup | reads files[].size_bytes and files[].kind from GET /sites/<n>/backups/<ts> | S |
+
+Contract guard: `tests/test_pilot_contract.py` replays every public SDK function against `tests/fixtures/pilot_dashboard_contract.json` (refresh with `just contract-refresh <host>`). `--dry-run` now prints the would-be `request` (method, path, params, body). Path segments are percent-encoded via `pilot.seg`.
 
 ### 2.9 Services (`services`: later; bucket in v1)
 | SDK | CLI | Plane | HTTP (C:svc.) | Cap | D | Status |
