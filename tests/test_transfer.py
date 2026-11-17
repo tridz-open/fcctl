@@ -176,3 +176,21 @@ def test_classify_by_kind():
     assert _part({"filename": "weird.bin", "kind": "public-file"}) == "public"
     assert _part({"filename": "x-database.sql.gz", "kind": "config"}) == "database"
     assert _part({"filename": "a-private-files.tar"}) == "private"
+
+
+def test_dry_run_records_transfer_writes_and_sends_none(clients):
+    from fcctl.request import DryRunRecorder
+    src, dst = clients
+    with respx.mock(assert_all_called=False) as router:
+        mock_src(router)
+        up, puts, rs = mock_dst(router)
+        DryRunRecorder.start()
+        try:
+            restore_from_site_backup(src, "s", TS, dst, "d", chunk_size=10)
+        finally:
+            recorded = DryRunRecorder.stop()
+        assert not up.called and not puts.called and not rs.called
+    methods = [r["method"] for r in recorded]
+    assert methods[0] == "POST" and "PUT" in methods and methods[-1] == "POST"
+    assert recorded[-1]["path"].endswith("/actions/restore")
+    assert not DryRunRecorder.active()

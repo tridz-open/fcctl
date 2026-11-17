@@ -1,6 +1,7 @@
 """Authenticated request builders (CentralClient, PilotClient), unwrap and typed errors."""
 from __future__ import annotations
 
+import contextvars
 import re
 import threading
 from fcctl._sync import _io
@@ -90,28 +91,39 @@ def raise_for_pilot(r: httpx.Response) -> Any:
     _generic(r, f"{r.status_code} {code} {r.text[:300]}", body, code or None)
 
 
+_DRY_RUN: contextvars.ContextVar[list | None] = contextvars.ContextVar("fcctl_dry_run", default=None)
+
+
 class DryRunRecorder:
-    """While active, non-GET requests are recorded instead of sent (used by --dry-run)."""
+    """While active, non-GET requests are recorded instead of sent (used by --dry-run).
+
+    State lives in a ContextVar, so it is per-context rather than process-global.
+    """
     MAX = 10
-    requests: list | None = None
 
     @classmethod
     def start(cls) -> None:
-        cls.requests = []
+        _DRY_RUN.set([])
 
     @classmethod
     def stop(cls) -> list:
-        out, cls.requests = cls.requests or [], None
+        out = _DRY_RUN.get() or []
+        _DRY_RUN.set(None)
         return out
+
+    @classmethod
+    def active(cls) -> bool:
+        return _DRY_RUN.get() is not None
 
     @classmethod
     def record(cls, method: str, path: str, params: Any, body: Any) -> bool:
         """True when the request was recorded (and must not be sent)."""
-        if cls.requests is None or method.upper() == "GET":
+        reqs = _DRY_RUN.get()
+        if reqs is None or method.upper() == "GET":
             return False
-        if len(cls.requests) >= cls.MAX:
+        if len(reqs) >= cls.MAX:
             raise RuntimeError("dry-run: too many requests recorded")
-        cls.requests.append({"method": method.upper(), "path": path, "params": params, "body": body})
+        reqs.append({"method": method.upper(), "path": path, "params": params, "body": body})
         return True
 
 

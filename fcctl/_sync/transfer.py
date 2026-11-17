@@ -12,7 +12,7 @@ from typing import Any, Callable
 
 import httpx
 
-from ..request import FcError, raise_for_pilot
+from ..request import DryRunRecorder, FcError, raise_for_pilot
 from . import _io
 from .pilot import seg, PilotClient
 
@@ -55,6 +55,8 @@ def _auth(p: PilotClient) -> tuple[dict, str]:
 def _call(p: PilotClient, method: str, path: str, *, retries: int = 4, backoff: float = 1.0,
           timeout: float = 120.0, headers: dict | None = None, **kw) -> httpx.Response:
     """One Pilot request with retry on 5xx/network errors and a single re-mint on 401."""
+    if DryRunRecorder.record(method, path, kw.get("params"), kw.get("json")):
+        return httpx.Response(200, json={})  # dry-run: recorded, never sent
     reminted, attempt = False, 0
     while True:
         h, gw = _auth(p)
@@ -127,7 +129,7 @@ def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup_times
         body = {"files": {p: {"filename": chosen[p]["filename"], "size": _size(chosen[p])} for p in parts}}
         up = raise_for_pilot(_call(dst_pilot, "POST", f"/sites/{seg(dst_site)}/uploads", json=body, **kw))
         st.clear()
-        st.update(upload_id=up["upload_id"], dst_site=dst_site, timestamp=backup_timestamp, done={})
+        st.update(upload_id=up["upload_id"] if "upload_id" in up or not DryRunRecorder.active() else "dry-run", dst_site=dst_site, timestamp=backup_timestamp, done={})
         save()
     uid, done = st["upload_id"], st.setdefault("done", {})
 
@@ -153,6 +155,8 @@ def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup_times
             save()
             if progress:
                 progress(sent, total, fid)
+            if DryRunRecorder.active():
+                break  # dry-run: one recorded chunk per part is enough
     if upload_only:
         # Uploading does not touch the target site; the overwriting restore is left to the caller
         # (e.g. the guarded backups.restore) so approval rules apply.
