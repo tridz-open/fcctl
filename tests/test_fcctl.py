@@ -154,3 +154,16 @@ def test_maintenance_patch_body(pilot):
 def test_imap_extract():
     from fcctl.auth import ImapCodePoller
     assert ImapCodePoller.extract("Your code is 482913. Valid 10 min") == "482913"
+
+
+@respx.mock
+def test_library_region_default_follows_env(central, monkeypatch):
+    from fcctl import infra
+    route = respx.get(BASE + "/api/v2/method/central.api.images.eligible_plans").mock(
+        return_value=httpx.Response(200, json={"data": []}))
+    monkeypatch.setenv("FCCTL_REGION", "blr")
+    infra.plans_eligible(central)
+    assert route.calls[0].request.url.params["region"] == "blr"
+    monkeypatch.delenv("FCCTL_REGION")
+    infra.plans_eligible(central)
+    assert route.calls[1].request.url.params["region"] == "bom"

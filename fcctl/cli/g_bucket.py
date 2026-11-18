@@ -1,6 +1,7 @@
 """bucket: list/create/usage/quota/delete."""
 from __future__ import annotations
 
+from ..region import default_region
 from .g_server import run_central
 
 
@@ -67,22 +68,22 @@ def register(sub, common):
     g = sub.add_parser("bucket", help="object storage buckets", parents=[common])
     gs = g.add_subparsers(dest="bucket_cmd", required=True)
     gs.add_parser("list", parents=[common]).set_defaults(func=list_)
-    x = gs.add_parser("create", parents=[common], help="create (secret shown once)")
+    x = gs.add_parser("create", parents=[common], help="[experimental] create (secret shown once)")
     x.add_argument("name")
-    x.add_argument("--region", default="bom")
+    x.add_argument("--region", default=default_region(), help="default: $FCCTL_REGION or bom")
     x.set_defaults(func=create)
     x = gs.add_parser("usage", parents=[common])
     x.add_argument("name")
     x.set_defaults(func=usage)
-    x = gs.add_parser("quota", parents=[common], help="set quota (0 = unlimited)")
+    x = gs.add_parser("quota", parents=[common], help="[experimental] set quota (0 = unlimited)")
     x.add_argument("name")
     x.add_argument("--size-gib", type=int)
     x.add_argument("--max-objects", type=int)
     x.set_defaults(func=quota)
-    x = gs.add_parser("delete", parents=[common], help="delete (guarded)")
+    x = gs.add_parser("delete", parents=[common], help="[experimental] delete (guarded)")
     x.add_argument("name")
     x.set_defaults(func=delete)
-    x = gs.add_parser("put", parents=[common], help="upload a local file to NAME/KEY")
+    x = gs.add_parser("put", parents=[common], help="[experimental] upload a local file to NAME/KEY")
     x.add_argument("name"); x.add_argument("key"); x.add_argument("file")
     x.add_argument("--content-type", default="application/octet-stream")
     x.set_defaults(func=put)

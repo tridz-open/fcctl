@@ -6,6 +6,7 @@ client's own central/pilot clients; no thread shims.
 """
 from __future__ import annotations
 
+from ..region import default_region
 from .pilot import seg
 
 import os
@@ -93,7 +94,7 @@ class Servers:
         """POST resize_server; refuses a disk shrink (DiskShrinkRefused) when both disks are known."""
         c = self._c.central
         cur = _disk(c.call("GET", M + "server_overview", params={"resource_id": server}))
-        plans = c.call("GET", "central.api.images.eligible_plans", params={"region": "bom"})
+        plans = c.call("GET", "central.api.images.eligible_plans", params={"region": default_region()})
         if isinstance(plans, dict):
             plans = plans.get("plans") or []
         new = next((_disk(p) for p in plans or [] if isinstance(p, dict) and plan in (p.get("name"), p.get("plan"))),

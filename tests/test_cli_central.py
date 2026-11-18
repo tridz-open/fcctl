@@ -189,3 +189,18 @@ def test_unauthenticated_exit_3(env, fake, capsys):
     run(capsys, "profile", "create", "m", "--email", "user@example.com", "--team", "TEAM-1", "--policy", "full")
     run(capsys, "profile", "use", "m")
     assert run(capsys, "server", "list")[0] == 3
+
+
+def test_region_default_is_configurable(cli, capsys, monkeypatch):
+    from fcctl import infra
+    from fcctl.region import DEFAULT_REGION, default_region
+    monkeypatch.setattr(infra, "plans_eligible", lambda c, **k: [{"plan": "p1", **k}])
+    assert default_region({}) == DEFAULT_REGION == "bom"
+    assert default_region({"FCCTL_REGION": " blr "}) == "blr"
+    assert default_region({"FCCTL_REGION": ""}) == "bom"
+    monkeypatch.setenv("FCCTL_REGION", "blr")
+    assert j(run(capsys, "server", "plans")[1])[0]["region"] == "blr"
+    assert j(run(capsys, "server", "plans", "--region", "fra")[1])[0]["region"] == "fra"
+    monkeypatch.delenv("FCCTL_REGION")
+    assert j(run(capsys, "server", "plans")[1])[0]["region"] == "bom"
+

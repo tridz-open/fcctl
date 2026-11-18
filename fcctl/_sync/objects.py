@@ -2,6 +2,7 @@
 """Object storage buckets on Central (presigned-URL object access)."""
 from __future__ import annotations
 
+from ..region import default_region
 from .central import CentralClient
 
 M = "central.services.api.storage."
@@ -11,9 +12,9 @@ def get_object_storage(c: CentralClient):
     return c.call("GET", M + "get_object_storage")
 
 
-def create_bucket(c: CentralClient, bucket_name: str, region: str = "bom"):
+def create_bucket(c: CentralClient, bucket_name: str, region: str | None = None):
     """Create a bucket. The secret is returned ONCE: store it."""
-    return c.call("POST", M + "create_bucket", json={"bucket_name": bucket_name, "region": region})
+    return c.call("POST", M + "create_bucket", json={"bucket_name": bucket_name, "region": region or default_region()})
 
 
 def delete_bucket(c: CentralClient, name: str):
