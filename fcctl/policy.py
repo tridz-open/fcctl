@@ -3,16 +3,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from .profiles import Profile
 
 RESTRICTIVENESS = {"full": 0, "guarded": 1, "read_only": 2, "protected": 3}
 
 # op_id -> kind (read|write|cost|disruptive|destructive); cost = write that changes spend (needs --confirm when guarded), plane (central|pilot), method
-def _o(kind, plane, method):
+def _o(kind: str, plane: str, method: str) -> dict[str, Any]:
     return {"kind": kind, "plane": plane, "method": method}
 
-REGISTRY: dict[str, dict] = {
+REGISTRY: dict[str, dict[str, Any]] = {
     # servers (central)
     "server.list": _o("read", "central", "GET"), "server.overview": _o("read", "central", "GET"),
     "server.create": _o("write", "central", "POST"),
@@ -135,7 +136,16 @@ def resolve_policy(login: str, team: str, profiles: list[Profile]) -> EffectiveP
     return EffectivePolicy(login, team, policy, allow, tuple(warns), tuple(p.name for p in m))
 
 
-def classify_raw(method: str, path: str) -> dict | None:
+READ_METHODS = ("GET", "HEAD", "OPTIONS")
+
+# Allowlist of path regexes for known-safe, read-style non-GET raw calls (e.g. POST RPCs that only
+# read). Intentionally empty: every registry entry with a `path` regex is already classified by
+# classify_raw, and nothing else is known safe. Anything unclassified and non-read needs approval
+# under `guarded` and `protected` (`fcctl approval approve <id>`); `--yes`/`--confirm` never bypass it.
+SAFE_RAW_NON_GET: tuple[str, ...] = ()
+
+
+def classify_raw(method: str, path: str) -> dict[str, Any] | None:
     """Match a raw call to a registry entry that declares a `path` regex; else None (unclassified)."""
     method = method.upper()
     for op_id, meta in REGISTRY.items():
@@ -145,8 +155,58 @@ def classify_raw(method: str, path: str) -> dict | None:
     return None
 
 
-def check(op, eff: EffectivePolicy, registry: dict | None = None) -> Decision:
-    """op: registry op id (str) or raw (method, path)."""
+_S, _B, _N = "central.api.servers.", "central.billing.api.dashboard.", "central.notification.api."
+# Central dotted method -> registered read op id. REGISTRY is keyed by op id, so raw-GET classification
+# needs this reverse index (derived from each read op's Central call site).
+CENTRAL_READ_METHODS: dict[str, str] = {
+    _S + "registry": "server.list", _S + "server_overview": "server.overview",
+    _S + "server_hostnames": "server.hostnames", _S + "server_metrics": "monitor.central_metrics",
+    "central.api.activity.server_activity": "activity.server", "central.api.activity.team_activity": "activity.team",
+    "central.api.snapshots.list_snapshots": "snapshot.list",
+    "central.services.api.storage.get_object_storage": "bucket.get",
+    "central.services.api.storage.get_bucket_usage": "bucket.usage",
+    "central.services.api.storage.get_object_url": "objects.get_url",
+    "central.api.images.list_images": "infra.images", "central.api.images.list_offerings": "infra.offerings",
+    "central.api.images.eligible_plans": "infra.plans_eligible",
+    _B + "get_trust_tier": "billing.trust_tier", _B + "catalog.get_eligible_plans": "billing.eligible_plans",
+    _B + "get_credit_balance": "billing.wallet_balance", _B + "credit_ledger": "billing.ledger",
+    _B + "list_invoices": "billing.invoices_list", _B + "get_invoice": "billing.invoice_get",
+    _B + "list_subscriptions": "billing.subscriptions", _B + "get_team_overview": "billing.overview",
+    _N + "list_notifications": "notification.list",
+}
+
+
+def central_read_op(method: str) -> str | None:
+    """Op id for a Central dotted method that maps to a registered read op, else None."""
+    op = CENTRAL_READ_METHODS.get(method)
+    meta = REGISTRY.get(op) if op else None
+    return op if meta and meta["kind"] == "read" and meta["plane"] == "central" else None
+
+
+_RESOURCE_RE = re.compile(r"^/api/resource/[^/?#]+(/[^/?#]+)?/?(\?.*)?$")
+RISKY_GET_RE = re.compile(r"drop|delete|restore|archive", re.I)
+_METHOD_PREFIX = "/api/method/"
+
+
+def raw_get_is_risky(plane: str | None, path: str) -> bool:
+    """An unclassified read-method raw call that must be treated as a write.
+
+    Frappe whitelisted methods accept GET, so on Central any `/api/method/<x>` (or bare dotted
+    method) is a write unless `<x>` is a registered read op. On Pilot, paths naming a destructive
+    verb (drop, delete, restore, archive) are write-like.
+    """
+    if plane == "central":
+        name = path[len(_METHOD_PREFIX):] if path.startswith(_METHOD_PREFIX) else path
+        if _RESOURCE_RE.match(path):  # Frappe REST GET on a resource is read-only
+            return False
+        meta = REGISTRY.get(name)
+        return not (central_read_op(name) or (meta and meta["kind"] == "read"))
+    return bool(RISKY_GET_RE.search(path))
+
+
+def check(op: str | tuple[str, str], eff: EffectivePolicy, registry: dict[str, dict[str, Any]] | None = None,
+          plane: str | None = None) -> Decision:
+    """op: registry op id (str) or raw (method, path). `plane` refines unclassified read-method calls."""
     reg = REGISTRY if registry is None else registry
     raw = False
     op_id = None
@@ -164,13 +224,19 @@ def check(op, eff: EffectivePolicy, registry: dict | None = None) -> Decision:
         else:
             kind = None  # unclassified
     pol = eff.policy
+    if kind is None and method in READ_METHODS and plane is not None:
+        if not raw_get_is_risky(plane, path):
+            return Allow()  # plain safe read
+        method = "POST"  # risky read-method call: treat as an unclassified write
     if kind is None:  # unclassified raw
-        if pol in ("read_only", "protected"):
+        if pol == "read_only" or (pol == "protected" and method in READ_METHODS):
             return Deny(f"unclassified raw operation {method} {path} rejected under {pol}")
         if method == "DELETE" or DESTRUCTIVE_RE.search(path):
             return NeedsApproval()
-        if method in ("POST", "PUT", "PATCH") and pol == "guarded":
-            return NeedsConfirm()
+        if pol in ("guarded", "protected") and method not in READ_METHODS:
+            if any(re.search(p, path) for p in SAFE_RAW_NON_GET):
+                return Allow()
+            return NeedsApproval()  # unknown write: fail closed to the two-person approval flow
         return Allow()
     is_write = kind in ("write", "cost", "disruptive", "destructive")
     if is_write:

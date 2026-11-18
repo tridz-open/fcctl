@@ -11,6 +11,8 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from . import retry as _retry
+from .redact import redact
 from .session_store import SessionStore
 
 CENTRAL_BASE = "https://dashboard.frappe.io"
@@ -20,8 +22,12 @@ from ._version import USER_AGENT as UA  # noqa: E402
 from .errors import (ApiError, AuthError, CloudflareChallenge, CsrfError, FcError, NotFound,  # noqa: E402,F401
                      RateLimited, ReauthFailed, TaskConflict, TaskFailed, ValidationError)
 
+__all__ = ["ApiError", "AuthError", "CloudflareChallenge", "CsrfError", "FcError", "NotFound",
+           "RateLimited", "ReauthFailed", "TaskConflict", "TaskFailed", "ValidationError", "UA",
+           "CENTRAL_BASE", "CentralClient", "PilotClient"]
 
-def _ids(r: httpx.Response) -> dict:
+
+def _ids(r: httpx.Response) -> dict[str, Any]:
     return {"request_id": r.headers.get("x-request-id") or r.headers.get("x-frappe-request-id"),
             "cf_ray": r.headers.get("cf-ray")}
 
@@ -91,7 +97,7 @@ def raise_for_pilot(r: httpx.Response) -> Any:
     _generic(r, f"{r.status_code} {code} {r.text[:300]}", body, code or None)
 
 
-_DRY_RUN: contextvars.ContextVar[list | None] = contextvars.ContextVar("fcctl_dry_run", default=None)
+_DRY_RUN: contextvars.ContextVar[list[Any] | None] = contextvars.ContextVar("fcctl_dry_run", default=None)
 
 
 class DryRunRecorder:
@@ -106,7 +112,7 @@ class DryRunRecorder:
         _DRY_RUN.set([])
 
     @classmethod
-    def stop(cls) -> list:
+    def stop(cls) -> list[Any]:
         out = _DRY_RUN.get() or []
         _DRY_RUN.set(None)
         return out
@@ -123,7 +129,7 @@ class DryRunRecorder:
             return False
         if len(reqs) >= cls.MAX:
             raise RuntimeError("dry-run: too many requests recorded")
-        reqs.append({"method": method.upper(), "path": path, "params": params, "body": body})
+        reqs.append(redact({"method": method.upper(), "path": path, "params": params, "body": body}))
         return True
 
 
@@ -133,8 +139,15 @@ class CentralClient:
     `reauth` (fcctl.reauth.Reauther) is invoked once on Auth/Csrf errors. Cloudflare challenges are raised, never solved.
     """
 
+    # Lazily created by PilotClient._cache (in-memory pilot token cache shared per client).
+    _pilot_tokens: dict[str, Any]
+    _pilot_lock: threading.Lock
+    _pilot_server_locks: dict[str, threading.Lock]
+
     def __init__(self, store: SessionStore, team: str | None = None, base: str = CENTRAL_BASE,
-                 http: httpx.Client | None = None, timeout: float = 60.0):
+                 http: httpx.Client | None = None, timeout: float = 60.0,
+                 retry: _retry.RetryPolicy | None = None, sleep: Callable[[float], Any] | None = None) -> None:
+        self.retry, self.sleep = retry, sleep
         self.store, self.team, self.base = store, team or store.data.get("team"), base.rstrip("/")
         self.http = http or httpx.Client(timeout=timeout, headers={"User-Agent": UA})
         self.reauth: Any = None
@@ -143,7 +156,7 @@ class CentralClient:
     def path(self, dotted: str) -> str:
         return f"/api/v2/method/{dotted}"
 
-    def build(self, method: str, dotted: str, params: dict | None = None, json: Any = None,
+    def build(self, method: str, dotted: str, params: dict[str, Any] | None = None, json: Any = None,
               team: bool = True) -> httpx.Request:
         q = dict(params or {})
         if team and self.team and "team" not in q and method.upper() == "GET":
@@ -165,12 +178,32 @@ class CentralClient:
             if m and m.group(1) not in ("Guest", "") and m.group(1) != self.store.sid:
                 self.store.set_central(sid=m.group(1))
 
-    def _once(self, method, dotted, params, json, team):
-        r = self.http.send(self.build(method, dotted, params, json, team))
+    def _once(self, method: str, dotted: str, params: dict[str, Any] | None, json: Any, team: bool) -> Any:
+        policy = self.retry or _retry.default_policy()
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                r = self.http.send(self.build(method, dotted, params, json, team))
+            except _retry.NETWORK_ERRORS:
+                if not (_retry.is_idempotent(method) and policy.can_retry(attempt)):
+                    raise
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt))
+                continue
+            if (_retry.retriable_status(r.status_code) and _retry.is_idempotent(method)
+                    and policy.can_retry(attempt) and not is_cloudflare_challenge(r)):
+                ra = _retry.parse_retry_after(r.headers.get("retry-after"))
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt, ra))
+                continue
+            break
         self._capture_cookie(r)
-        return raise_for_central(r)
+        try:
+            return raise_for_central(r)
+        except FcError as e:
+            _retry.annotate(e, attempt)
+            raise
 
-    def call(self, method: str, dotted: str, params: dict | None = None, json: Any = None,
+    def call(self, method: str, dotted: str, params: dict[str, Any] | None = None, json: Any = None,
              team: bool = True, _retried: bool = False) -> Any:
         try:
             return self._once(method, dotted, params, json, team)
@@ -180,22 +213,24 @@ class CentralClient:
             self.reauth.recover(scope="central", error=e)
             return self.call(method, dotted, params, json, team, _retried=True)
 
-    def get(self, dotted, **params): return self.call("GET", dotted, params=params)
-    def post(self, dotted, **body): return self.call("POST", dotted, json=body)
+    def get(self, dotted: str, **params: Any) -> Any: return self.call("GET", dotted, params=params)
+    def post(self, dotted: str, **body: Any) -> Any: return self.call("POST", dotted, json=body)
 
 
 class PilotClient:
     """Pilot admin API on a server gateway: {gateway}/api/v1/*, Bearer JWT from get_bench_link."""
 
     def __init__(self, central: CentralClient, server: str, http: httpx.Client | None = None,
-                 timeout: float = 120.0, max_age: float = 120.0, clock: Callable[[], float] = _io.now):
+                 timeout: float = 120.0, max_age: float = 120.0, clock: Callable[[], float] = _io.now,
+                 retry: _retry.RetryPolicy | None = None, sleep: Callable[[float], Any] | None = None) -> None:
+        self.retry, self.sleep = retry, sleep
         self.max_age, self.clock = max_age, clock
         self.central, self.server = central, server
         self.store = central.store
         self.http = http or httpx.Client(timeout=timeout, headers={"User-Agent": UA})
 
     # Tokens live in memory only (shared per CentralClient), never in the SessionStore.
-    def _cache(self) -> dict:
+    def _cache(self) -> dict[str, Any]:
         c = self.central
         if not hasattr(c, "_pilot_tokens"):
             c._pilot_tokens = {}
@@ -208,15 +243,15 @@ class PilotClient:
         with self.central._pilot_lock:
             return self.central._pilot_server_locks.setdefault(self.server, threading.Lock())
 
-    def _fresh(self, s: dict | None) -> bool:
-        return bool(s) and (self.clock() - s["issued_at"]) < self.max_age
+    def _fresh(self, s: dict[str, Any] | None) -> bool:
+        return s is not None and bool(s) and (self.clock() - s["issued_at"]) < self.max_age
 
-    def mint(self) -> dict:
+    def mint(self) -> dict[str, Any]:
         """central.api.sso.get_bench_link?server=<id> -> data.url = <gateway>/?sid=<JWT>. Single-flight."""
         with self._server_lock():
             return self._mint_locked()
 
-    def _mint_locked(self) -> dict:
+    def _mint_locked(self) -> dict[str, Any]:
         data = self.central.call("GET", "central.api.sso.get_bench_link", params={"server": self.server},
                                  team=False)
         url = data["url"] if isinstance(data, dict) else data
@@ -228,7 +263,7 @@ class PilotClient:
         self._cache()[self.server] = s
         return s
 
-    def session(self, force: bool = False) -> dict:
+    def session(self, force: bool = False) -> dict[str, Any]:
         """Lazy mint; re-mint when older than max_age. Concurrent callers share one mint."""
         s = self._cache().get(self.server)
         if not force and self._fresh(s):
@@ -243,25 +278,46 @@ class PilotClient:
     def invalidate(self) -> None:
         self._cache().pop(self.server, None)
 
-    def request(self, method: str, path: str, params: dict | None = None, json: Any = None,
-                idempotency_key: str | None = None, raw: bool = False, _retried: bool = False) -> Any:
+    def request(self, method: str, path: str, params: dict[str, Any] | None = None, json: Any = None,
+                idempotency_key: str | None = None, raw: bool = False, _retried: bool = False,
+                _attempt: int = 0) -> Any:
         s = self.session()
         headers = {"Accept": "application/json", "Authorization": f"Bearer {s['token']}"}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        r = self.http.request(method.upper(), f"{s['gateway']}/api/v1{path}", params=params, json=json,
-                              headers=headers)
+        url = f"{s['gateway']}/api/v1{path}"
+        policy = self.retry or _retry.default_policy()
+        attempt = _attempt  # a re-auth retry continues the count, so it cannot reset the limit
+        while True:
+            attempt += 1
+            try:
+                r = self.http.request(method.upper(), url, params=params, json=json, headers=headers)
+            except _retry.NETWORK_ERRORS as exc:
+                if not (_retry.retriable_error(method, exc) and policy.can_retry(attempt)):
+                    raise
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt))
+                continue
+            if (_retry.retriable_response(method, r.status_code)
+                    and policy.can_retry(attempt) and not is_cloudflare_challenge(r)):
+                ra = _retry.parse_retry_after(r.headers.get("retry-after"))
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt, ra))
+                continue
+            break
         try:
             return r if raw else raise_for_pilot(r)
         except AuthError:
             if _retried:
                 raise
             self.invalidate()
-            return self.request(method, path, params, json, idempotency_key, raw, _retried=True)
+            return self.request(method, path, params, json, idempotency_key, raw, _retried=True,
+                                _attempt=attempt)
+        except FcError as e:
+            _retry.annotate(e, attempt)
+            raise
 
-    def get(self, path, **params): return self.request("GET", path, params=params or None)
-    def post(self, path, json=None, key: str | None = None):
+    def get(self, path: str, **params: Any) -> Any: return self.request("GET", path, params=params or None)
+    def post(self, path: str, json: Any = None, key: str | None = None) -> Any:
         return self.request("POST", path, json=json if json is not None else {}, idempotency_key=key or str(uuid.uuid4()))
-    def patch(self, path, json): return self.request("PATCH", path, json=json)
-    def put(self, path, json): return self.request("PUT", path, json=json)
-    def delete(self, path, **params): return self.request("DELETE", path, params=params or None)
+    def patch(self, path: str, json: Any) -> Any: return self.request("PATCH", path, json=json)
+    def put(self, path: str, json: Any) -> Any: return self.request("PUT", path, json=json)
+    def delete(self, path: str, **params: Any) -> Any: return self.request("DELETE", path, params=params or None)

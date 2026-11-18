@@ -3,6 +3,8 @@
 Shared helpers (`run_central`, `poll`) live here and are reused by the other central groups."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import uuid
 
 from .._sync import _io
@@ -156,11 +158,11 @@ def metrics(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("server", help="Frappe Cloud servers", parents=[common])
-    gs = g.add_subparsers(dest="server_cmd", required=True)
+    gs = add_group(sub, common, "server", "Frappe Cloud servers",
+                   ["fcctl server list", "fcctl server get server-abc123"], "server_cmd")
 
-    def add(name, func, help_, id_=True, **kw):
-        x = gs.add_parser(name, parents=[common], help=help_)
+    def add(name, func, help_, example, id_=True, **kw):
+        x = add_cmd(gs, common, name, help_, example)
         if id_:
             x.add_argument("id", help="server resource id")
         x.set_defaults(func=func)
@@ -169,9 +171,10 @@ def register(sub, common):
     def pollable(x):
         x.add_argument("--poll", type=float, default=15.0, help=argparse_suppress())
 
-    add("list", list_, "list servers", id_=False)
-    add("get", get, "server overview")
-    c = add("create", create, "[experimental] create a server", id_=False)
+    add("list", list_, "list servers", "fcctl server list", id_=False)
+    add("get", get, "server overview", "fcctl server get server-abc123")
+    c = add("create", create, "[experimental] create a server",
+            "fcctl --dry-run server create --title prod --plan PLAN --image IMAGE_ID --region bom", id_=False)
     c.add_argument("--title", required=True)
     c.add_argument("--plan", required=True)
     c.add_argument("--image", required=True, help="image id")
@@ -181,26 +184,29 @@ def register(sub, common):
     c.add_argument("--request-key", help="idempotency key (reuse on retry)")
     pollable(c)
     for n, f, h in (("start", start, "[experimental] start"), ("stop", stop, "[experimental] stop (guarded)"), ("restart", restart, "[experimental] restart")):
-        pollable(add(n, f, h))
-    r = add("resize", resize, "[experimental] resize (cost-changing; needs --confirm under guarded)")
+        pollable(add(n, f, h, f"fcctl --dry-run server {n} server-abc123"))
+    r = add("resize", resize, "[experimental] resize (cost-changing; needs --confirm under guarded)",
+            "fcctl --dry-run server resize server-abc123 --plan PLAN")
     r.add_argument("--plan", required=True)
     pollable(r)
-    p = add("protect", protect, "[experimental] termination protection on|off (off is guarded)")
+    p = add("protect", protect, "[experimental] termination protection on|off (off is guarded)",
+            "fcctl --dry-run server protect server-abc123 on")
     p.add_argument("state", choices=["on", "off"])
-    t = add("terminate", terminate, "[experimental] terminate (guarded)")
+    t = add("terminate", terminate, "[experimental] terminate (guarded)",
+            "fcctl --dry-run server terminate server-abc123 --take-snapshot")
     t.add_argument("--take-snapshot", action="store_true")
-    w = add("wait", wait, "wait until a server reaches a status")
+    w = add("wait", wait, "wait until a server reaches a status", "fcctl server wait server-abc123 --status Running")
     w.add_argument("--status", default="Running")
     pollable(w)
-    pl = add("plans", plans, "eligible plans", id_=False)
+    pl = add("plans", plans, "eligible plans", "fcctl server plans --region bom", id_=False)
     pl.add_argument("--region", default=default_region(), help="default: $FCCTL_REGION or bom")
     pl.add_argument("--offering")
     pl.add_argument("--image")
     pl.add_argument("--snapshot")
-    im = add("images", images, "server images", id_=False)
+    im = add("images", images, "server images", "fcctl server images --region bom", id_=False)
     im.add_argument("--region", default=default_region(), help="default: $FCCTL_REGION or bom")
     im.add_argument("--offering", default="pilot")
-    m = add("metrics", metrics, "server metrics")
+    m = add("metrics", metrics, "server metrics", "fcctl server metrics server-abc123 --period 6h")
     m.add_argument("--period", default="1h")
     m.add_argument("--live", action="store_true", help="live metrics from Pilot")
 

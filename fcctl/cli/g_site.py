@@ -1,6 +1,8 @@
 """site: list/get/create/provision/drop/login/maintenance/migrate/clear-cache/config/domain."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 
 def _kv(pairs):
     from ..errors import UsageError
@@ -83,6 +85,17 @@ def s_provision(ctx, args):
     if args.workflow_id and not args.dry_run:  # resume: the journal already holds the recipe; do not create a new write op
         res = fn()
         return {"workflow_id": args.workflow_id, **res} if isinstance(res, dict) else res
+    if args.dry_run:
+        # Never construct a ProvisionRun (it writes the journal). Show the first deterministic write only.
+        from .. import sites
+
+        def fn():  # noqa: F811
+            return sites.create_site(p, args.site, args.app or [])
+        plan = ops.run_op("site.create", args.site, fn, ctx=oc)
+        if isinstance(plan, dict) and plan.get("dry_run"):
+            plan["note"] = ("provision is a multi-step workflow; only the first deterministic write is shown. "
+                            "Later steps (bench apps, restore, hooks, config) depend on responses from earlier ones.")
+        return plan
     return ops.run_op("site.create", args.site, fn, ctx=oc)
 
 
@@ -156,36 +169,58 @@ def s_domain_records(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("site", parents=[common], help="sites on a pilot server").add_subparsers(
-        dest="site_cmd", required=True)
-    g.add_parser("list", parents=[common]).set_defaults(func=s_list)
-    x = g.add_parser("get", parents=[common]); x.add_argument("site"); x.set_defaults(func=s_get)
-    x = g.add_parser("create", parents=[common]); x.add_argument("site")
+    g = add_group(sub, common, "site", "sites on a pilot server",
+                  ["fcctl site list", "fcctl site get demo.example.com"], "site_cmd")
+    add_cmd(g, common, "list", "list sites on the server", ["fcctl site list", "fcctl -o table site list"]).set_defaults(func=s_list)
+    x = add_cmd(g, common, "get", "show one site", "fcctl site get demo.example.com")
+    x.add_argument("site"); x.set_defaults(func=s_get)
+    x = add_cmd(g, common, "create", "create a bare site (use `provision` for a full workflow)",
+                "fcctl --dry-run site create demo.example.com --app erpnext")
+    x.add_argument("site")
     x.add_argument("--app", action="append"); x.set_defaults(func=s_create)
-    x = g.add_parser("provision", parents=[common], help="resumable provisioning workflow")
+    x = add_cmd(g, common, "provision", "resumable provisioning workflow",
+                ["fcctl --dry-run site provision demo.example.com --app erpnext --config developer_mode=1",
+                 "fcctl site provision demo.example.com --workflow-id WORKFLOW_ID"])
     x.add_argument("site"); x.add_argument("--app", action="append", help="site app (repeatable)")
     x.add_argument("--bench-app", action="append", help="bench app name or repo URL (repeatable)")
     x.add_argument("--from-backup", metavar="PROFILE:SITE:TIMESTAMP"); x.add_argument("--max-age")
     x.add_argument("--hook", action="append", metavar="NAME@VER"); x.add_argument("--config", action="append", metavar="K=V")
     x.add_argument("--workflow-id", help="resume this workflow"); x.add_argument("--allow-hook-upgrade", action="store_true")
     x.set_defaults(func=s_provision)
-    x = g.add_parser("drop", parents=[common], help="drop a site (guarded)"); x.add_argument("site")
+    x = add_cmd(g, common, "drop", "drop a site (guarded)", "fcctl --dry-run site drop demo.example.com --no-backup")
+    x.add_argument("site")
     x.add_argument("--no-backup", action="store_true"); x.set_defaults(func=s_drop)
-    x = g.add_parser("rename", parents=[common], help="rename a site (guarded)"); x.add_argument("site")
+    x = add_cmd(g, common, "rename", "rename a site (guarded)",
+                "fcctl --dry-run site rename demo.example.com new.example.com --keep-old-hostname")
+    x.add_argument("site")
     x.add_argument("new_name", metavar="NEW"); x.add_argument("--keep-old-hostname", action="store_true")
     x.set_defaults(func=s_rename)
-    x = g.add_parser("login", parents=[common]); x.add_argument("site"); x.add_argument("--hint")
+    x = add_cmd(g, common, "login", "get a one-time login link for a site", "fcctl site login demo.example.com --hint admin")
+    x.add_argument("site"); x.add_argument("--hint")
     x.set_defaults(func=s_login)
-    x = g.add_parser("maintenance", parents=[common]); x.add_argument("site"); x.add_argument("state", choices=["on", "off"])
+    x = add_cmd(g, common, "maintenance", "turn maintenance mode on or off", "fcctl site maintenance demo.example.com on")
+    x.add_argument("site"); x.add_argument("state", choices=["on", "off"])
     x.set_defaults(func=s_maintenance)
-    x = g.add_parser("migrate", parents=[common]); x.add_argument("site"); x.set_defaults(func=_action("site.migrate", "migrate"))
-    x = g.add_parser("clear-cache", parents=[common]); x.add_argument("site")
+    x = add_cmd(g, common, "migrate", "run `bench migrate` on a site", "fcctl site migrate demo.example.com")
+    x.add_argument("site"); x.set_defaults(func=_action("site.migrate", "migrate"))
+    x = add_cmd(g, common, "clear-cache", "clear a site's cache", "fcctl site clear-cache demo.example.com")
+    x.add_argument("site")
     x.set_defaults(func=_action("site.clear_cache", "clear_cache"))
-    c = g.add_parser("config", parents=[common]).add_subparsers(dest="config_cmd", required=True)
-    x = c.add_parser("get", parents=[common]); x.add_argument("site"); x.set_defaults(func=s_config_get)
-    x = c.add_parser("set", parents=[common]); x.add_argument("site"); x.add_argument("pairs", nargs="+", metavar="KEY=VALUE")
+    c = add_group(g, common, "config", "read and change site_config.json",
+                  ["fcctl site config get demo.example.com", "fcctl site config set demo.example.com developer_mode=1"],
+                  "config_cmd")
+    x = add_cmd(c, common, "get", "show a site's config", "fcctl site config get demo.example.com")
+    x.add_argument("site"); x.set_defaults(func=s_config_get)
+    x = add_cmd(c, common, "set", "set config keys (values parsed as JSON when possible)",
+                "fcctl site config set demo.example.com developer_mode=1 'limits={\"users\": 5}'")
+    x.add_argument("site"); x.add_argument("pairs", nargs="+", metavar="KEY=VALUE")
     x.set_defaults(func=s_config_set)
-    d = g.add_parser("domain", parents=[common]).add_subparsers(dest="domain_cmd", required=True)
-    x = d.add_parser("list", parents=[common]); x.add_argument("site"); x.set_defaults(func=s_domain_list)
-    x = d.add_parser("records", parents=[common]); x.add_argument("site"); x.add_argument("domain")
+    d = add_group(g, common, "domain", "custom domains of a site",
+                  ["fcctl site domain list demo.example.com", "fcctl site domain records demo.example.com shop.example.org"],
+                  "domain_cmd")
+    x = add_cmd(d, common, "list", "list a site's domains", "fcctl site domain list demo.example.com")
+    x.add_argument("site"); x.set_defaults(func=s_domain_list)
+    x = add_cmd(d, common, "records", "show the DNS records to set for a domain",
+                "fcctl site domain records demo.example.com shop.example.org")
+    x.add_argument("site"); x.add_argument("domain")
     x.set_defaults(func=s_domain_records)

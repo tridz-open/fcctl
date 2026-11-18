@@ -5,34 +5,12 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from . import policy as pol
-from .request import FcError
 
-try:  # another worker owns fcctl/errors.py; import defensively
-    from .errors import PolicyDenied  # type: ignore
-except Exception:
-    class PolicyDenied(FcError):  # type: ignore
-        exit_code = 4
+from .errors import ApprovalPending, FcError, PolicyDenied
 
-try:
-    from .errors import ApprovalPending  # type: ignore
-except Exception:
-    class ApprovalPending(FcError):  # type: ignore
-        exit_code = 7
 
-        def __init__(self, message="approval pending", approval_id=None, **kw):
-            super().__init__(message, **kw)
-            self.approval_id = approval_id
-
-try:
-    from .errors import ConfirmRequired  # type: ignore
-except Exception:
-    class ConfirmRequired(FcError):  # type: ignore
-        exit_code = 2
-
-if not hasattr(PolicyDenied, "exit_code"):
-    PolicyDenied.exit_code = 4
-if not hasattr(ApprovalPending, "exit_code"):
-    ApprovalPending.exit_code = 7
+class ConfirmRequired(FcError):
+    exit_code = 2
 
 
 @dataclass
@@ -48,15 +26,15 @@ class OpContext:
     dry_run: bool = False
     record_dry_run: bool = False  # run fn under DryRunRecorder to capture would-be requests (real clients only)
     confirm: Any = None  # True, or the target string echoed back
-    args: dict = field(default_factory=dict)
+    args: dict[str, Any] = field(default_factory=dict)
     kind: str = "central"  # plane for guard.request
     server: str | None = None
     workflow_id: str | None = None
     team_membership: Callable[[str], None] | None = None
-    clients: dict = field(default_factory=dict)  # plane -> client (raw api)
+    clients: dict[str, Any] = field(default_factory=dict)  # plane -> client (raw api)
 
 
-def _audit(ctx: OpContext, op, target, outcome, **extra):
+def _audit(ctx: OpContext, op: str, target: Any, outcome: str, **extra: Any) -> Any:
     if ctx.audit is None:
         return None
     return ctx.audit.append(
@@ -64,12 +42,13 @@ def _audit(ctx: OpContext, op, target, outcome, **extra):
         op=op, target=str(target), workflow_id=ctx.workflow_id, outcome=outcome, **extra)
 
 
-def _confirmed(ctx: OpContext, target) -> bool:
+def _confirmed(ctx: OpContext, target: Any) -> bool:
     c = ctx.confirm
     return c is True or (isinstance(c, str) and c == str(target))
 
 
-def execute_decision(decision, label, target, fn, ctx: OpContext, *, is_read=False, journal_op=None):
+def execute_decision(decision: Any, label: str, target: Any, fn: Callable[[], Any], ctx: OpContext, *,
+                     is_read: bool = False, journal_op: str | None = None) -> Any:
     """Shared engine. `label` is the audit op name; `journal_op` the journal/idempotency op id."""
     dname = type(decision).__name__
     if ctx.dry_run:
@@ -98,7 +77,7 @@ def execute_decision(decision, label, target, fn, ctx: OpContext, *, is_read=Fal
         rec = ctx.guard.request(label, target, dict(ctx.args), kind=ctx.kind, server=ctx.server)
         _audit(ctx, label, target, "approval_requested", approval_id=rec.id)
         err = ApprovalPending(f"approval {rec.id} pending for {label} on {target}")
-        err.approval_id = rec.id
+        setattr(err, "approval_id", rec.id)  # dynamic attribute read by the CLI renderer
         raise err
     if isinstance(decision, pol.NeedsConfirm) and not _confirmed(ctx, target):
         _audit(ctx, label, target, "confirm_missing")
@@ -120,7 +99,7 @@ def execute_decision(decision, label, target, fn, ctx: OpContext, *, is_read=Fal
     return res
 
 
-def run_op(op_id: str, target, fn: Callable[[], Any], *, ctx: OpContext):
+def run_op(op_id: str, target: Any, fn: Callable[[], Any], *, ctx: OpContext) -> Any:
     decision = pol.check(op_id, ctx.eff)
     meta = pol.REGISTRY.get(op_id) or {}
     return execute_decision(decision, op_id, target, fn, ctx, is_read=meta.get("kind") == "read")

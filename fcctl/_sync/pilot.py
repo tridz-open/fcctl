@@ -8,7 +8,8 @@ from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 
-from ..request import AuthError, DryRunRecorder, raise_for_pilot
+from .. import retry as _retry
+from ..request import AuthError, DryRunRecorder, FcError, is_cloudflare_challenge, raise_for_pilot
 from . import _io
 from .central import CentralClient
 from .transport import UA, make_http
@@ -21,14 +22,16 @@ def seg(value: Any) -> str:
 
 class PilotClient:
     def __init__(self, central: CentralClient, server: str, http: httpx.Client | None = None,
-                 timeout: float = 120.0, max_age: float = 120.0, clock: Callable[[], float] = _io.now):
+                 timeout: float = 120.0, max_age: float = 120.0, clock: Callable[[], float] = _io.now,
+                 retry: _retry.RetryPolicy | None = None, sleep=None):
+        self.retry, self.sleep = retry, sleep
         self.max_age, self.clock = max_age, clock
         self.central, self.server = central, server
         self.store = central.store
         self.http = http or make_http(timeout, UA)
 
     def _cache(self) -> dict:
-        c = self.central
+        c: Any = self.central  # per-central cache attributes are attached dynamically
         if not hasattr(c, "_pilot_tokens"):
             c._pilot_tokens = {}
             c._pilot_server_locks = {}
@@ -36,10 +39,11 @@ class PilotClient:
 
     def _server_lock(self):
         self._cache()
-        return self.central._pilot_server_locks.setdefault(self.server, _io.Lock())
+        central: Any = self.central
+        return central._pilot_server_locks.setdefault(self.server, _io.Lock())
 
     def _fresh(self, s: dict | None) -> bool:
-        return bool(s) and (self.clock() - s["issued_at"]) < self.max_age
+        return s is not None and bool(s) and (self.clock() - s["issued_at"]) < self.max_age
 
     def mint(self) -> dict:
         with self._server_lock():
@@ -71,22 +75,43 @@ class PilotClient:
         self._cache().pop(self.server, None)
 
     def request(self, method: str, path: str, params: dict | None = None, json: Any = None,
-                      idempotency_key: str | None = None, raw: bool = False, _retried: bool = False) -> Any:
+                      idempotency_key: str | None = None, raw: bool = False, _retried: bool = False,
+                _attempt: int = 0) -> Any:
         if DryRunRecorder.record(method, path, params, json):
             return {}
         s = self.session()
         headers = {"Accept": "application/json", "Authorization": f"Bearer {s['token']}"}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        r = self.http.request(method.upper(), f"{s['gateway']}/api/v1{path}", params=params,
-                                    json=json, headers=headers)
+        url = f"{s['gateway']}/api/v1{path}"
+        policy = self.retry or _retry.default_policy()
+        attempt = _attempt  # a re-auth retry continues the count, so it cannot reset the limit
+        while True:
+            attempt += 1
+            try:
+                r = self.http.request(method.upper(), url, params=params, json=json, headers=headers)
+            except _retry.NETWORK_ERRORS as exc:
+                if not (_retry.retriable_error(method, exc) and policy.can_retry(attempt)):
+                    raise
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt))
+                continue
+            if (_retry.retriable_response(method, r.status_code)
+                    and policy.can_retry(attempt) and not is_cloudflare_challenge(r)):
+                ra = _retry.parse_retry_after(r.headers.get("retry-after"))
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt, ra))
+                continue
+            break
         try:
             return r if raw else raise_for_pilot(r)
         except AuthError:
             if _retried:
                 raise
             self.invalidate()
-            return self.request(method, path, params, json, idempotency_key, raw, _retried=True)
+            return self.request(method, path, params, json, idempotency_key, raw, _retried=True,
+                                      _attempt=attempt)
+        except FcError as e:
+            _retry.annotate(e, attempt)
+            raise
 
     def get(self, path, **params): return self.request("GET", path, params=params or None)
     def post(self, path, json=None, key: str | None = None):

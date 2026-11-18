@@ -1,6 +1,8 @@
 """bucket: list/create/usage/quota/delete."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 from ..region import default_region
 from .g_server import run_central
 
@@ -65,32 +67,35 @@ def presign(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("bucket", help="object storage buckets", parents=[common])
-    gs = g.add_subparsers(dest="bucket_cmd", required=True)
-    gs.add_parser("list", parents=[common]).set_defaults(func=list_)
-    x = gs.add_parser("create", parents=[common], help="[experimental] create (secret shown once)")
+    gs = add_group(sub, common, "bucket", "object storage buckets",
+                   ["fcctl bucket list", "fcctl bucket usage my-bucket"], "bucket_cmd")
+    add_cmd(gs, common, "list", "list buckets", "fcctl bucket list").set_defaults(func=list_)
+    x = add_cmd(gs, common, "create", "[experimental] create (secret shown once)",
+                "fcctl --dry-run bucket create my-bucket --region bom")
     x.add_argument("name")
     x.add_argument("--region", default=default_region(), help="default: $FCCTL_REGION or bom")
     x.set_defaults(func=create)
-    x = gs.add_parser("usage", parents=[common])
+    x = add_cmd(gs, common, "usage", "show bucket usage", "fcctl bucket usage my-bucket")
     x.add_argument("name")
     x.set_defaults(func=usage)
-    x = gs.add_parser("quota", parents=[common], help="[experimental] set quota (0 = unlimited)")
+    x = add_cmd(gs, common, "quota", "[experimental] set quota (0 = unlimited)",
+                "fcctl --dry-run bucket quota my-bucket --size-gib 50 --max-objects 100000")
     x.add_argument("name")
     x.add_argument("--size-gib", type=int)
     x.add_argument("--max-objects", type=int)
     x.set_defaults(func=quota)
-    x = gs.add_parser("delete", parents=[common], help="[experimental] delete (guarded)")
+    x = add_cmd(gs, common, "delete", "[experimental] delete (guarded)", "fcctl --dry-run bucket delete my-bucket")
     x.add_argument("name")
     x.set_defaults(func=delete)
-    x = gs.add_parser("put", parents=[common], help="[experimental] upload a local file to NAME/KEY")
+    x = add_cmd(gs, common, "put", "[experimental] upload a local file to NAME/KEY",
+                "fcctl bucket put my-bucket reports/q1.pdf ./q1.pdf --content-type application/pdf")
     x.add_argument("name"); x.add_argument("key"); x.add_argument("file")
     x.add_argument("--content-type", default="application/octet-stream")
     x.set_defaults(func=put)
-    x = gs.add_parser("get", parents=[common], help="download NAME/KEY to DEST")
+    x = add_cmd(gs, common, "get", "download NAME/KEY to DEST", "fcctl bucket get my-bucket reports/q1.pdf ./q1.pdf")
     x.add_argument("name"); x.add_argument("key"); x.add_argument("dest")
     x.set_defaults(func=get)
-    x = gs.add_parser("presign", parents=[common], help="print a presigned URL")
+    x = add_cmd(gs, common, "presign", "print a presigned URL", "fcctl bucket presign my-bucket reports/q1.pdf --method get")
     x.add_argument("name"); x.add_argument("key")
     x.add_argument("--method", choices=["get", "put"], default="get")
     x.add_argument("--content-type", default="application/octet-stream")

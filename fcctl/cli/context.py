@@ -63,7 +63,15 @@ class Ctx:
             from ..session_store import SessionStore
             p = self.profile_or_none
             name = f"session-{config.session_key(p)}.enc" if p else "session.enc"
-            key = self.env.get("FCCTL_KEY")
+            from ..keys import get_key
+            key = get_key(self.env, self.home)
+            if not key and getattr(self.args, "dry_run", False):
+                # read-only dry run: no key yet, so use a throwaway in-memory session (nothing real is touched)
+                import tempfile
+
+                from cryptography.fernet import Fernet
+                return SessionStore(Path(tempfile.mkdtemp(prefix="fcctl-dry-")) / "s.enc", Fernet.generate_key(),
+                                    profile_dir=self.home / "profile")
             return SessionStore(self.home / name, key, profile_dir=self.home / "profile")
         return self._memo("store", mk)
 
@@ -123,9 +131,14 @@ class Ctx:
     def guard(self):
         def mk():
             from ..alerts import Alerter
-            from ..guard import Guard
-            return Guard(home=self.home, key=self.env.get("FCCTL_KEY"), secret=self.env.get("FCCTL_APPROVAL_SECRET", ""),
-                         alerter=Alerter(self.env), user=self.actor)
+            from ..guard import Guard, load_private_key
+            from ..keys import get_key
+            p = self.profile_or_none
+            pins = {x.name: dict(x.approver_pubkeys) for x in self.profiles.list() if x.approver_pubkeys}
+            return Guard(home=self.home, key=get_key(self.env, self.home), secret=self.env.get("FCCTL_APPROVAL_SECRET", ""),
+                         alerter=Alerter(self.env), user=self.actor, approver_pubkeys=pins,
+                         approver_private_key=load_private_key(self.env),
+                         profile=p.name if p else "", team=p.team if p else "")
         return self._memo("guard", mk)
 
     def op_context(self, plane: str = "central", **kw):

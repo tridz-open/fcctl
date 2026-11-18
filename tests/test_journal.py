@@ -210,3 +210,34 @@ def test_expired_ttl_marker_cleared_to_failed(guard):
     jr.transition(guard.markers()[0]["journal_id"], "failed", error="gone")
     out = clear_orphan_markers(guard, jr, now=guard.now() + 10 ** 6)
     assert out["cleared"] == [rec.id] and guard._load()[rec.id].status == "failed"
+
+
+def test_journal_round_trip_keeps_real_values(jr):
+    args = {"smtp_password": "hunter2", "token_count": 3, "encryption_key": "k3y", "site": "a.example.com"}
+    e = jr.create("create_site", args)
+    assert jr.get(e["id"])["args"] == args
+    assert jr.list()[0]["args"] == args
+
+
+def test_journal_file_mode_is_0600(jr):
+    import stat
+    e = jr.create("create_site", {"smtp_password": "x"})
+    assert stat.S_IMODE(jr._path(e["id"]).stat().st_mode) == 0o600
+    jr.transition(e["id"], J.DISPATCHING)
+    assert stat.S_IMODE(jr._path(e["id"]).stat().st_mode) == 0o600
+
+
+def test_rendering_journal_masks_secrets(jr):
+    e = jr.create("create_site", {"smtp_password": "hunter2", "token_count": 3})
+    out = J.render_entry(jr.get(e["id"]))
+    assert out["args"]["smtp_password"] == "[REDACTED]" and out["args"]["token_count"] == 3
+    assert "hunter2" not in json.dumps(out)
+
+
+def test_journal_error_redacted_on_write_state_raw(jr):
+    e = jr.create("x", {"password": "RAWPW123456"})
+    jr.transition(e["id"], "dispatching")
+    jr.transition(e["id"], "outcome_unknown", error="boom password=LEAKEDPW99 Authorization: Bearer abc.def")
+    raw = (jr.dir / f"{e['id']}.json").read_text()
+    assert "LEAKEDPW99" not in raw and "abc.def" not in raw
+    assert json.loads(raw)["args"]["password"] == "RAWPW123456"

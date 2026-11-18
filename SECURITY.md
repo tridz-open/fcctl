@@ -13,6 +13,6 @@ Include the version or tag, what you did, what you expected and what happened. W
 
 - fcctl runs on your machine with your Frappe Cloud session. Anyone who holds the session, `FCCTL_KEY` and the approval secret can bypass every fcctl check by calling the API directly.
 - The approval step is a local speed bump against accidents, buggy scripts and over-eager agents. Approver names are not authenticated, so it is not separation of duties. Use separate Frappe Cloud accounts with restricted roles for that.
-- State lives in `$FCCTL_HOME` (directory 0700, files 0600). The session file is Fernet-encrypted with `FCCTL_KEY`. Approvals are HMAC-signed; the audit log is hash-chained for tamper evidence. Approvals, journal and audit are not encrypted (integrity, not confidentiality).
+- State lives in `$FCCTL_HOME` (directory 0700, files 0600). The session file is Fernet-encrypted with `FCCTL_KEY`. Approvals are HMAC-signed in the local store, and approvals for profiles with a pinned `approver_pubkeys` entry also need an Ed25519 signature from the approver's private key; the audit log is hash-chained for tamper evidence. Approvals, journal and audit are not encrypted (integrity, not confidentiality).
 - Credentials (sid, CSRF, Pilot tokens, approval tokens) are not logged, and the approval token is never accepted on the command line.
 - fcctl does not bypass Cloudflare or bot protection.

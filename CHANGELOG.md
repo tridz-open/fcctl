@@ -4,6 +4,27 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.1.0a4] - 2026-11-18
+
+### Added
+- `fcctl init` creates the session key on first run (OS keyring via the optional `fcctl[keyring]` extra, else a 0600 file); `FCCTL_KEY` still wins. `doctor` suggests an exact fix per failed check and `doctor --fix` applies the safe ones. Read-only `--dry-run` works without a key.
+- `api --data @file` and `--data -` (stdin); inline bodies print a warning.
+- Retry with exponential backoff and jitter on 429, 5xx and network errors for idempotent requests (GET/HEAD/OPTIONS and writes with an idempotency key), honouring `Retry-After`; `--max-retries` and `FCCTL_MAX_RETRIES`.
+- Optional `FCCTL_APPROVER_KEY` signed approvals and `--require-signed`.
+- Library facade: `unsafe=True` (audited) opt-out on `Sites.drop` and `Backups.restore`; guard model documented.
+- Full bash, zsh and fish completion for subcommands and flags, generated from the parser.
+- Help line and `Examples:` on every subcommand; generated `docs/COMMANDS.md` with a CI drift check; exit-code table in the README.
+- Single `redact()` helper applied to errors, `--debug` output, audit, journal and dry-run output.
+- mypy in CI (clean; strict on errors, policy, guard, request, ops), `py.typed`, coverage floor (83%), macOS runner and Python 3.14 in CI.
+
+### Changed
+- Every error class and common failure carries specific what/why/fix text.
+- Unclassified `api` writes require approval under the `guarded` and `protected` policies; they replay as op `api.raw`.
+- `--dry-run` of named guarded commands now shows the HTTP requests; `site provision --dry-run` no longer writes a journal.
+- `--debug` no longer re-raises unexpected exceptions raw (they go through the redacted error path).
+- Journal arguments are redacted on disk.
+- Global flags are listed once in root `--help`.
+
 ## [0.1.0a3] - 2026-11-18
 
 ### Changed

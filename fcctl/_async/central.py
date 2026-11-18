@@ -6,14 +6,19 @@ from typing import Any
 
 import httpx
 
-from ..request import AuthError, CsrfError, DryRunRecorder, raise_for_central
+from .. import retry as _retry
+from ..request import (AuthError, CsrfError, DryRunRecorder, FcError, is_cloudflare_challenge,
+                       raise_for_central)
 from ..session_store import SessionStore
+from . import _io
 from .transport import CENTRAL_BASE, UA, make_http
 
 
 class CentralClient:
     def __init__(self, store: SessionStore, team: str | None = None, base: str = CENTRAL_BASE,
-                 http: httpx.AsyncClient | None = None, timeout: float = 60.0):
+                 http: httpx.AsyncClient | None = None, timeout: float = 60.0,
+                 retry: _retry.RetryPolicy | None = None, sleep=None):
+        self.retry, self.sleep = retry, sleep
         self.store, self.team, self.base = store, team or store.data.get("team"), base.rstrip("/")
         self.http = http or make_http(timeout, UA)
         self.reauth: Any = None
@@ -52,9 +57,29 @@ class CentralClient:
                 self.store.set_central(sid=m.group(1))
 
     async def _once(self, method, dotted, params, json, team):
-        r = await self.http.send(self.build(method, dotted, params, json, team))
+        policy = self.retry or _retry.default_policy()
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                r = await self.http.send(self.build(method, dotted, params, json, team))
+            except _retry.NETWORK_ERRORS:
+                if not (_retry.is_idempotent(method) and policy.can_retry(attempt)):
+                    raise
+                await (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt))
+                continue
+            if (_retry.retriable_status(r.status_code) and _retry.is_idempotent(method)
+                    and policy.can_retry(attempt) and not is_cloudflare_challenge(r)):
+                ra = _retry.parse_retry_after(r.headers.get("retry-after"))
+                await (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt, ra))
+                continue
+            break
         self._capture_cookie(r)
-        return raise_for_central(r)
+        try:
+            return raise_for_central(r)
+        except FcError as e:
+            _retry.annotate(e, attempt)
+            raise
 
     async def call(self, method: str, dotted: str, params: dict | None = None, json: Any = None,
                    team: bool = True, _retried: bool = False) -> Any:

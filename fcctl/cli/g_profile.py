@@ -1,6 +1,8 @@
 """profile: list / show / create / use / set / delete."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import dataclasses
 
 
@@ -9,6 +11,20 @@ def _row(p, current=None):
     d["allow"] = list(p.allow)
     d["current"] = p.name == current
     return d
+
+
+def _pins(items):
+    """NAME=BASE64_PUBKEY pairs (from `fcctl approval keygen`) -> dict."""
+    from ..errors import UsageError
+    out = {}
+    for it in items or ():
+        name, sep, key = it.partition("=")
+        if not sep or not name.strip() or not key.strip():
+            raise UsageError("bad --approver-pubkey", what=f"{it!r} is not NAME=PUBLIC_KEY",
+                             why="a pinned key needs the approver name and the base64 public key",
+                             fix="use e.g. --approver-pubkey alice=<key from `fcctl approval keygen`>")
+        out[name.strip()] = key.strip()
+    return out
 
 
 def list_(ctx, args):
@@ -29,7 +45,8 @@ def show(ctx, args):
 
 def create(ctx, args):
     from ..profiles import Profile
-    p = Profile(args.name, args.email, args.team, args.policy, tuple(args.allow or ()), args.session_ref)
+    p = Profile(args.name, args.email, args.team, args.policy, tuple(args.allow or ()), args.session_ref,
+                approver_pubkeys=_pins(args.approver_pubkey))
     return _row(ctx.profiles.create(p))
 
 
@@ -49,6 +66,8 @@ def set_(ctx, args):
             ch[k] = getattr(args, k)
     if args.allow is not None:
         ch["allow"] = tuple(args.allow)
+    if args.approver_pubkey:
+        ch["approver_pubkeys"] = {**old.approver_pubkeys, **_pins(args.approver_pubkey)}
     return _row(ctx.profiles.set(Profile(**{**dataclasses.asdict(old), **ch})))
 
 
@@ -62,19 +81,27 @@ def delete(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("profile", help="manage profiles", parents=[common])
-    gs = g.add_subparsers(dest="profile_cmd", required=True)
-    gs.add_parser("list", parents=[common]).set_defaults(func=list_)
-    x = gs.add_parser("show", parents=[common]); x.add_argument("name", nargs="?"); x.set_defaults(func=show)
-    x = gs.add_parser("create", parents=[common])
+    gs = add_group(sub, common, "profile", "manage profiles",
+                   ["fcctl profile list", "fcctl profile use main"], "profile_cmd")
+    add_cmd(gs, common, "list", "list profiles", "fcctl profile list").set_defaults(func=list_)
+    x = add_cmd(gs, common, "show", "show a profile (default: the active one)", ["fcctl profile show", "fcctl profile show main"])
+    x.add_argument("name", nargs="?"); x.set_defaults(func=show)
+    x = add_cmd(gs, common, "create", "create a profile",
+                "fcctl profile create main --email you@example.com --team TEAM-xxxx --policy guarded")
     x.add_argument("name"); x.add_argument("--email", required=True); x.add_argument("--team", required=True)
     x.add_argument("--policy", default="guarded", choices=["full", "guarded", "read_only", "protected"])
     x.add_argument("--allow", action="append"); x.add_argument("--session-ref")
+    x.add_argument("--approver-pubkey", action="append", metavar="NAME=PUBKEY",
+                   help="pin an approver Ed25519 public key; the profile then requires signed approvals (repeatable)")
     x.set_defaults(func=create)
-    x = gs.add_parser("use", parents=[common]); x.add_argument("name"); x.set_defaults(func=use)
-    x = gs.add_parser("set", parents=[common])
+    x = add_cmd(gs, common, "use", "make a profile the active one", "fcctl profile use main")
+    x.add_argument("name"); x.set_defaults(func=use)
+    x = add_cmd(gs, common, "set", "change fields of a profile", "fcctl profile set main --policy read_only")
     x.add_argument("name"); x.add_argument("--email"); x.add_argument("--team")
     x.add_argument("--policy", choices=["full", "guarded", "read_only", "protected"])
     x.add_argument("--allow", action="append"); x.add_argument("--session-ref")
+    x.add_argument("--approver-pubkey", action="append", metavar="NAME=PUBKEY",
+                   help="pin an approver Ed25519 public key; the profile then requires signed approvals (repeatable)")
     x.set_defaults(func=set_)
-    x = gs.add_parser("delete", parents=[common]); x.add_argument("name"); x.set_defaults(func=delete)
+    x = add_cmd(gs, common, "delete", "delete a profile", "fcctl profile delete old-profile")
+    x.add_argument("name"); x.set_defaults(func=delete)

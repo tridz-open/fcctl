@@ -1,6 +1,8 @@
 """notification: list [--unread] / read."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 from .g_server import run_central
 
 
@@ -24,14 +26,15 @@ def read(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("notification", help="team notifications", parents=[common])
-    gs = g.add_subparsers(dest="notification_cmd", required=True)
-    x = gs.add_parser("list", parents=[common])
+    gs = add_group(sub, common, "notification", "team notifications",
+                   ["fcctl notification list --unread", "fcctl notification read --all"], "notification_cmd")
+    x = add_cmd(gs, common, "list", "list notifications", ["fcctl notification list", "fcctl notification list --unread --limit 5"])
     x.add_argument("--unread", action="store_true")
     x.add_argument("--start", type=int, default=0)
     x.add_argument("--limit", type=int, default=20)
     x.set_defaults(func=list_)
-    x = gs.add_parser("read", parents=[common])
+    x = add_cmd(gs, common, "read", "mark a notification (or all) as read",
+                ["fcctl notification read NOTIFICATION_NAME", "fcctl notification read --all"])
     x.add_argument("name", nargs="?")
     x.add_argument("--all", action="store_true")
     x.set_defaults(func=read)

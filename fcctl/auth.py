@@ -8,7 +8,7 @@ import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from fcctl._sync import _io
-from typing import Callable
+from typing import Callable, cast
 
 
 from .request import AuthError, CentralClient
@@ -53,7 +53,7 @@ class ImapCodePoller:
             m.select(self.folder)
             # Gmail IMAP FROM search is word-based ("frappe" misses "frappecloud.com"): search by date and
             # filter the sender in Python instead.
-            since = datetime.fromtimestamp(self.started - self.SKEW, timezone.utc).strftime("%d-%b-%Y")
+            since = datetime.fromtimestamp((self.started or 0.0) - self.SKEW, timezone.utc).strftime("%d-%b-%Y")
             self.baseline = set(self._uids(m, "SINCE", since))
         finally:
             try:
@@ -66,7 +66,7 @@ class ImapCodePoller:
             dt = parsedate_to_datetime(msg.get("Date", ""))
             if dt.tzinfo is None:
                 dt = dt.replace(tzinfo=timezone.utc)
-            return dt.timestamp() >= self.started - self.SKEW
+            return dt.timestamp() >= (self.started or 0.0) - self.SKEW
         except (TypeError, ValueError):
             return True  # no usable Date: rely on the UID baseline
 
@@ -77,7 +77,7 @@ class ImapCodePoller:
         try:
             m.login(self.user, self.password)
             m.select(self.folder)
-            since = datetime.fromtimestamp(self.started - self.SKEW, timezone.utc).strftime("%d-%b-%Y")
+            since = datetime.fromtimestamp((self.started or 0.0) - self.SKEW, timezone.utc).strftime("%d-%b-%Y")
             for mid in reversed(self._uids(m, "SINCE", since)):
                 if mid in self.baseline:
                     continue
@@ -93,7 +93,7 @@ class ImapCodePoller:
                         break
                     for p in msg.walk():
                         if p.get_content_type() == ctype:
-                            body = p.get_payload(decode=True).decode(errors="ignore")
+                            body = cast(bytes, p.get_payload(decode=True)).decode(errors="ignore")
                             code = self.extract(re.sub(r"#[0-9a-fA-F]{6}\b", "", body)) or code
                 if code:
                     m.uid("store", mid, "+FLAGS", "\\Seen")

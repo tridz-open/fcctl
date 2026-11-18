@@ -96,7 +96,10 @@ def _load(state: dict | str | Path | None) -> tuple[dict, Callable[[], None]]:
         return d, lambda: None
     path = Path(state)
     d = json.loads(path.read_text()) if path.exists() else {}
-    return d, lambda: path.write_text(json.dumps(d))
+
+    def _write() -> None:
+        path.write_text(json.dumps(d))
+    return d, _write
 
 
 async def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup_timestamp: str,
@@ -111,13 +114,13 @@ async def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup
     `state` (dict or JSON file path) records upload_id and per-part uploaded offsets so a rerun
     resumes. progress(bytes_done_total, bytes_total, filename) is called after each chunk.
     """
-    kw = dict(retries=retries, backoff=backoff, timeout=chunk_timeout)
+    kw: dict[str, Any] = dict(retries=retries, backoff=backoff, timeout=chunk_timeout)
     meta = raise_for_pilot(await _call(src_pilot, "GET", f"/sites/{seg(src_site)}/backups/{seg(backup_timestamp)}", **kw))
     files = (meta.get("files") if isinstance(meta, dict) else None) or []
     chosen: dict[str, dict] = {}
     for f in files:
         part = _part(f)
-        if part in parts:
+        if part is not None and part in parts:
             chosen[part] = f
     missing = [p for p in parts if p not in chosen]
     if missing:
@@ -125,8 +128,8 @@ async def restore_from_site_backup(src_pilot: PilotClient, src_site: str, backup
 
     st, save = _load(state)
     if st.get("dst_site") != dst_site or st.get("timestamp") != backup_timestamp or "upload_id" not in st:
-        body = {"files": {p: {"filename": chosen[p]["filename"], "size": _size(chosen[p])} for p in parts}}
-        up = raise_for_pilot(await _call(dst_pilot, "POST", f"/sites/{seg(dst_site)}/uploads", json=body, **kw))
+        up_body: dict[str, Any] = {"files": {p: {"filename": chosen[p]["filename"], "size": _size(chosen[p])} for p in parts}}
+        up = raise_for_pilot(await _call(dst_pilot, "POST", f"/sites/{seg(dst_site)}/uploads", json=up_body, **kw))
         st.clear()
         st.update(upload_id=up["upload_id"] if "upload_id" in up or not DryRunRecorder.active() else "dry-run", dst_site=dst_site, timestamp=backup_timestamp, done={})
         save()

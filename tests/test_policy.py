@@ -1,6 +1,6 @@
 from hypothesis import given, strategies as st
 
-from fcctl.policy import (REGISTRY, Allow, Deny, NeedsApproval, NeedsConfirm, check, resolve_policy)
+from fcctl.policy import (REGISTRY, Allow, Deny, NeedsApproval, check, resolve_policy)
 from fcctl.profiles import Profile, load_profiles
 
 WRITES = [o for o, m in REGISTRY.items() if m["kind"] != "read"]
@@ -55,12 +55,13 @@ def test_guarded_and_full():
 def test_raw():
     g = eff("guarded")
     assert isinstance(check(("GET", "/api/x"), g), Allow)
-    assert isinstance(check(("POST", "/api/x"), g), NeedsConfirm)
+    assert isinstance(check(("POST", "/api/x"), g), NeedsApproval)  # unknown write needs approval
     assert isinstance(check(("DELETE", "/api/x"), g), NeedsApproval)
     assert isinstance(check(("POST", "/api/site/drop"), g), NeedsApproval)
+    assert isinstance(check(("POST", "/api/x"), eff("protected")), NeedsApproval)
     for pol in ("read_only", "protected"):
         assert isinstance(check(("GET", "/api/x"), eff(pol)), Deny)
-        assert isinstance(check(("POST", "/api/x"), eff(pol)), Deny)
+    assert isinstance(check(("POST", "/api/x"), eff("read_only")), Deny)
 
 
 profile_st = st.builds(

@@ -114,7 +114,9 @@ def test_pilot_token_expiry_and_calls_log(fake_fc):
 
 def test_rate_limit(fake_fc):
     assert isinstance(fake_fc, FakeFrappeCloud)
+    from fcctl.retry import RetryPolicy
     p = fake_fc.pilot()
+    p.retry = RetryPolicy(max_retries=0)  # retry behaviour is covered in test_retry.py
     fake_fc.inject_rate_limit("/sites")
     with pytest.raises(RateLimited) as e:
         sites.list_sites(p)

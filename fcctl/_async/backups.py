@@ -1,6 +1,8 @@
 """Site backups through Pilot."""
 from __future__ import annotations
 
+from typing import Any
+
 from ..errors import UsageError
 from . import transfer
 from .pilot import seg, PilotClient
@@ -61,7 +63,7 @@ async def download_file(p: PilotClient, site: str, timestamp: str, file_id: str,
     async with p.http.stream("GET", f"{s['gateway']}/api/v1/sites/{site}/backups/{timestamp}/files/{file_id}/content",
                              headers={"Authorization": f"Bearer {s['token']}"}) as r:
         r.raise_for_status()
-        chunks = getattr(r, "aiter_bytes", None) or r.iter_bytes  # async / sync httpx response
+        chunks: Any = getattr(r, "aiter_bytes", None) or r.iter_bytes  # async / sync httpx response
         with open(dest, "wb") as f:
             async for chunk in chunks():
                 f.write(chunk)

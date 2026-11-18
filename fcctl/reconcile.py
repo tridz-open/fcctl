@@ -13,7 +13,7 @@ AMBIGUOUS = {J.DISPATCHING, J.UNKNOWN}
 
 def reconcile(journal: J.Journal, resolvers: dict, ttl: float = 300, resubmit=None, now=None) -> dict:
     t = (now or journal.now)()
-    report = {"succeeded": [], "failed": [], "unresolved": [], "resubmitted": [], "skipped": []}
+    report: dict[str, list] = {"succeeded": [], "failed": [], "unresolved": [], "resubmitted": [], "skipped": []}
     for e in journal.list(AMBIGUOUS):
         if e["state"] == J.DISPATCHING and t - e["updated_at"] < ttl:
             report["skipped"].append(e["id"])
@@ -79,7 +79,7 @@ def clear_orphan_markers(guard, journal: J.Journal, now=None) -> dict:
     """Clear `.executing` markers whose PID is dead or TTL expired, only once the journal entry is resolved.
     Approvals are never reset or re-armed: status is set executed/failed from the journal, or left alone."""
     t = now if now is not None else guard.now()
-    out = {"cleared": [], "kept": []}
+    out: dict[str, list] = {"cleared": [], "kept": []}
     for m in guard.markers():
         orphan = not pid_alive(m.get("pid")) or t > m.get("ts", 0) + guard_ttl(guard)
         if not orphan:

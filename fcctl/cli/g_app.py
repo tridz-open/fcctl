@@ -1,6 +1,8 @@
 """app: list / add / remove (bench) and install / uninstall (--site)."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 
 def a_list(ctx, args):
     from .. import apps, ops, sites
@@ -79,21 +81,28 @@ def a_check_updates(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("app", parents=[common], help="bench / site apps").add_subparsers(dest="app_cmd", required=True)
-    x = g.add_parser("list", parents=[common]); x.add_argument("--site"); x.set_defaults(func=a_list)
-    x = g.add_parser("add", parents=[common], help="add an app (prefer --site: installs on a site). [experimental] bench-only add and --repo are not live-tested")
+    g = add_group(sub, common, "app", "bench / site apps",
+                  ["fcctl app list --site demo.example.com", "fcctl app install erpnext --site demo.example.com"], "app_cmd")
+    x = add_cmd(g, common, "list", "list bench apps, or the apps on one site",
+                ["fcctl app list", "fcctl app list --site demo.example.com"])
+    x.add_argument("--site"); x.set_defaults(func=a_list)
+    x = add_cmd(g, common, "add", "add an app (prefer --site: installs on a site). [experimental] bench-only add and --repo are not live-tested",
+                ["fcctl app add erpnext --site demo.example.com",
+                 "fcctl --dry-run app add myapp --repo https://github.com/org/myapp --branch main"])
     x.add_argument("name", nargs="?"); x.add_argument("--repo"); x.add_argument("--branch")
     x.add_argument("--sites", nargs="*")
     x.add_argument("--site", action="append", help="fetch and install NAME on this site (repeatable) instead of only adding it to the bench")
     x.set_defaults(func=a_add)
-    x = g.add_parser("remove", parents=[common], help="[experimental] remove an app from the bench (guarded)")
+    x = add_cmd(g, common, "remove", "[experimental] remove an app from the bench (guarded)", "fcctl --dry-run app remove myapp")
     x.add_argument("name"); x.set_defaults(func=a_remove)
-    x = g.add_parser("check-updates", parents=[common], help="[experimental] git-fetch every bench app and show which have updates")
+    x = add_cmd(g, common, "check-updates", "[experimental] git-fetch every bench app and show which have updates",
+                "fcctl app check-updates")
     x.set_defaults(func=a_check_updates)
-    x = g.add_parser("install", parents=[common], help="install an app on a site")
+    x = add_cmd(g, common, "install", "install an app on a site", "fcctl app install erpnext --site demo.example.com")
     x.add_argument("name", nargs="?"); x.add_argument("--site", required=True)
     x.add_argument("--repo"); x.add_argument("--branch")
     x.set_defaults(func=a_install)
-    x = g.add_parser("uninstall", parents=[common], help="uninstall an app from a site (guarded)")
+    x = add_cmd(g, common, "uninstall", "uninstall an app from a site (guarded)",
+                "fcctl --dry-run app uninstall erpnext --site demo.example.com")
     x.add_argument("name"); x.add_argument("--site", required=True); x.add_argument("--force", action="store_true")
     x.add_argument("--remove-from-bench", action="store_true"); x.set_defaults(func=a_uninstall)

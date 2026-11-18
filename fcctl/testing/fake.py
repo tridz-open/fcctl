@@ -240,7 +240,7 @@ class FakeFrappeCloud:
         if fn == "central.api.servers.registry":
             return _data({"servers": list(self.servers.values())})
         if fn == "central.api.servers.server_overview":
-            s = self.servers.get(q.get("resource_id"))
+            s = self.servers.get(q.get("resource_id") or "")
             return _data(s) if s else _central_err(404, "DoesNotExistError", "no such server")
         if fn == "central.api.servers.action_status":
             return _data({"name": q.get("name"), "status": "Success"})
@@ -258,13 +258,13 @@ class FakeFrappeCloud:
         act = {"start_server": "Running", "restart_server": "Running", "stop_server": "Stopped"}
         short = fn.rsplit(".", 1)[-1]
         if fn.startswith("central.api.servers.") and short in act:
-            s = self.servers.get(body.get("resource_id"))
+            s = self.servers.get(body.get("resource_id") or "")
             if not s:
                 return _central_err(404, "DoesNotExistError", "no such server")
             s["status"] = act[short]
             return _data({"resource_id": s["resource_id"], "status": s["status"]})
         if short == "terminate_server":
-            self.servers.pop(body.get("resource_id"), None)
+            self.servers.pop(body.get("resource_id") or "", None)
             return _data({"terminated": True})
         if fn.startswith("central.api.snapshots."):
             return self._snapshots(short, body, q)

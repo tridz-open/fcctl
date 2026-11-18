@@ -6,19 +6,29 @@ import stat
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Mapping
 
 from ._fs import private_dir
 from .policy import EffectivePolicy, resolve_policy
 from .profiles import Profile, parse_profiles
 from .request import AuthError, FcError, ReauthFailed
 
-_FIELDS = ("email", "team", "policy", "allow", "owner", "owner_id", "session_store", "session_ref")
+_FIELDS = ("email", "team", "policy", "allow", "owner", "owner_id", "session_store", "session_ref", "approver_pubkeys")
 
 
-class ConfigError(FcError): ...
-class InsecureEnvFile(ConfigError): ...
-class NoCredentials(AuthError): ...
+class ConfigError(FcError):
+    default_why = "The fcctl configuration (config.toml, profiles or env file) is missing or invalid."
+    default_fix = "Check it with `fcctl doctor`; list profiles with `fcctl profile list`."
+
+
+class InsecureEnvFile(ConfigError):
+    default_why = "The env file holds secrets but is readable by other users."
+    default_fix = "Run `chmod 600` on the env file and retry."
+
+
+class NoCredentials(AuthError):
+    default_why = "No Frappe Cloud credentials were found in any source."
+    default_fix = "Run `fcctl auth login`, or set FCCTL_SID / FCCTL_EMAIL (or FCCTL_ENV_FILE) and FCCTL_KEY."
 
 
 def home(env: Mapping[str, str] | None = None) -> Path:
@@ -34,8 +44,13 @@ def load_config(path: Path | str | None = None) -> dict:
     p = Path(path) if path else config_path()
     if not p.exists():
         return {}
-    with open(p, "rb") as f:
-        return tomllib.load(f)
+    try:
+        with open(p, "rb") as f:
+            return tomllib.load(f)
+    except tomllib.TOMLDecodeError as e:
+        raise ConfigError(f"cannot parse config file {p}", what=f"config file {p} is not valid TOML",
+                          why=f"TOML syntax error: {e}",
+                          fix=f"Fix the syntax in {p} (or move it aside and re-create profiles with `fcctl profile create`).") from e
 
 
 def _val(v) -> str:
@@ -99,32 +114,39 @@ class ProfileStore:
         for p in self.list():
             if p.name == name:
                 return p
-        raise ConfigError(f"unknown profile {name!r}")
+        raise ConfigError(f"unknown profile {name!r}", what=f"unknown profile {name!r}",
+                          why="no profile with that name exists in config.toml",
+                          fix="List profiles with `fcctl profile list`, or create one with `fcctl profile create`.")
 
     def current(self) -> str | None:
         return (self._data().get("fcctl") or {}).get("current")
 
     def set(self, profile: Profile) -> Profile:
         d = self._data()
-        row = {"email": profile.login, "team": profile.team, "policy": profile.policy}
+        row: dict[str, Any] = {"email": profile.login, "team": profile.team, "policy": profile.policy}
         if profile.allow:
             row["allow"] = list(profile.allow)
         for k in ("owner", "owner_id", "session_store", "session_ref"):
             if getattr(profile, k):
                 row[k] = getattr(profile, k)
+        if profile.approver_pubkeys:
+            row["approver_pubkeys"] = dict(profile.approver_pubkeys)
         d.setdefault("profiles", {})[profile.name] = row
         save_config(d, self.path)
         return profile
 
     def create(self, profile: Profile) -> Profile:
         if profile.name in (self._data().get("profiles") or {}):
-            raise ConfigError(f"profile {profile.name!r} already exists")
+            raise ConfigError(f"profile {profile.name!r} already exists", why="profile names must be unique",
+                              fix="Choose another name, or remove the old one with `fcctl profile delete`.")
         return self.set(profile)
 
     def delete(self, name: str) -> None:
         d = self._data()
         if name not in (d.get("profiles") or {}):
-            raise ConfigError(f"unknown profile {name!r}")
+            raise ConfigError(f"unknown profile {name!r}", what=f"unknown profile {name!r}",
+                              why="no profile with that name exists in config.toml",
+                              fix="List profiles with `fcctl profile list`.")
         del d["profiles"][name]
         if (d.get("fcctl") or {}).get("current") == name:
             del d["fcctl"]["current"]
@@ -143,7 +165,9 @@ def select_profile(explicit: str | None = None, env: Mapping[str, str] | None = 
     store = store or ProfileStore(config_path(env))
     name = explicit or env.get("FCCTL_PROFILE") or store.current()
     if not name:
-        raise ConfigError("no profile selected (use --profile, FCCTL_PROFILE or `profile use`)")
+        raise ConfigError("no profile selected", what="no profile selected",
+                          why="neither --profile, FCCTL_PROFILE nor a current profile is set",
+                          fix="Pass --profile NAME, set FCCTL_PROFILE, or run `fcctl profile use NAME`.")
     return store.get(name)
 
 
@@ -165,7 +189,8 @@ def check_owner(profile: Profile, env: Mapping[str, str] | None = None) -> None:
 
 
 def conflicts(profiles: list[Profile]) -> list[str]:
-    out, seen = [], set()
+    out: list[str] = []
+    seen: set = set()
     for p in profiles:
         k = (p.login, p.team)
         if k in seen:
@@ -190,9 +215,10 @@ class Credentials:
 def check_env_file(path: Path | str) -> Path:
     p = Path(path)
     if not p.is_file():
-        raise ConfigError(f"env file not found: {p}")
+        raise ConfigError(f"env file not found: {p}", why="FCCTL_ENV_FILE / --env-file points to a path that is not a file",
+                          fix="Correct the path or create the file with mode 600.")
     if p.stat().st_mode & (stat.S_IRWXG | stat.S_IRWXO):
-        raise InsecureEnvFile(f"env file {p} is accessible by group/others; chmod 600")
+        raise InsecureEnvFile(f"env file {p} is accessible by group/others", fix=f"Run: chmod 600 {p}")
     return p
 
 
@@ -228,11 +254,13 @@ def _keyring(profile: Profile | None) -> Credentials | None:
 
 
 def _encrypted(env: Mapping[str, str]) -> Credentials | None:
-    if not env.get("FCCTL_KEY"):
-        return None
     try:
+        from .keys import get_key
         from .session_store import SessionStore
-        s = SessionStore(path=home(env) / "session.enc", key=env["FCCTL_KEY"])
+        key = get_key(env, home(env))
+        if not key:
+            return None
+        s = SessionStore(path=home(env) / "session.enc", key=key)
     except Exception:
         return None
     return Credentials(None, s.sid, s.csrf, "encrypted_file") if s.sid else None
@@ -242,6 +270,7 @@ def resolve_credentials(explicit: Credentials | Mapping[str, str] | None = None,
                         env: Mapping[str, str] | None = None, env_file: Path | str | None = None,
                         profile: Profile | None = None) -> Credentials:
     env = os.environ if env is None else env
+    c: Credentials | None
     if explicit:
         c = explicit if isinstance(explicit, Credentials) else Credentials(
             explicit.get("login"), explicit.get("sid"), explicit.get("csrf"), "explicit")
@@ -258,4 +287,6 @@ def resolve_credentials(explicit: Credentials | Mapping[str, str] | None = None,
     c = _keyring(profile) or _encrypted(env)
     if c:
         return c
-    raise NoCredentials("no credentials found (explicit, env, env file, keyring, encrypted file)")
+    raise NoCredentials("no credentials found", what="no credentials found",
+                        why="checked explicit values, environment, env file, keyring and the encrypted session file",
+                        fix="Run `fcctl auth login`, or set FCCTL_SID/FCCTL_EMAIL, and FCCTL_KEY for the encrypted store.")

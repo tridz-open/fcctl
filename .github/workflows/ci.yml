@@ -4,17 +4,25 @@ on:
   pull_request:
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        python: ["3.11", "3.12", "3.13"]
+        os: [ubuntu-latest]
+        python: ["3.11", "3.12", "3.13", "3.14"]
+        include:
+          - os: macos-latest
+            python: "3.13"
     steps:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv venv -p ${{ matrix.python }} && uv pip install -e '.[dev]'
+      - run: uv lock --check
       - run: .venv/bin/ruff check .
       - run: .venv/bin/python scripts/gen_sync.py --check
-      - run: .venv/bin/pytest -q
+      - run: .venv/bin/python scripts/gen_commands.py --check
+      - run: .venv/bin/mypy fcctl
+      - run: .venv/bin/pytest -q --cov=fcctl --cov-report=term --cov-fail-under=83
   gate:
     runs-on: ubuntu-latest
     steps:
