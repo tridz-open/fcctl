@@ -18,6 +18,12 @@ On top of the raw calls it adds a safety layer: per-profile policies, an approva
 
 **Who it is for:** developers and operators who run sites on Frappe Cloud and want to script them, and teams building a Frappe SaaS that needs to create and manage customer sites automatically. If you only manage a couple of sites by hand, the dashboard is the better tool.
 
+## Related: Frappe Cloud today vs. v2
+
+fcctl targets the **upcoming Frappe Cloud v2**, which is split into **Central** (dashboard.frappe.io: team, billing, servers, snapshots, buckets) and **Pilot** (the per-server gateway: sites, apps, backups, tasks, logs).
+For the **current** Frappe Cloud (the `press.api.*` RPC API the existing dashboard uses, with API-key auth, bench and site lifecycle, domains and backups), see the separate Python SDK [esafwan/frappe_cloud_sdk](https://github.com/esafwan/frappe_cloud_sdk), built from the open-source frappe/press backend and checked against a live account.
+Neither project is official, and neither is affiliated with Frappe.
+
 ## Why it exists
 
 fcctl was created to start the SaaS work behind [URY](https://ury.app), an open-source restaurant POS and ERP built on Frappe and ERPNext ([github.com/ury-erp/ury](https://github.com/ury-erp/ury)). URY's hosted offering needed to create, restore and manage customer sites on Frappe Cloud from a control plane, without a person clicking through the dashboard. fcctl is that automation layer, kept product-neutral so any Frappe SaaS can use it.
