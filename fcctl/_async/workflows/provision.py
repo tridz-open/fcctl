@@ -96,9 +96,9 @@ class LiveApi:
         return await sites.set_maintenance(self.pilot, site, on)
 
     async def site_config(self, site):
-        info = await self.get_site(site) or {}
-        info = info.get("site", info) if isinstance(info.get("site"), dict) else info
-        return info.get("config") or info
+        # GET /sites/{s} carries no config; the dashboard reads GET /sites/{s}/configuration.
+        cfg = await self.pilot.get(f"/sites/{seg(site)}/configuration")
+        return cfg if isinstance(cfg, dict) else {}
 
     async def patch_config(self, site, cfg):
         return await self.pilot.patch(f"/sites/{seg(site)}/configuration", cfg)

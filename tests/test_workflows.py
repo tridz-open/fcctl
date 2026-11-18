@@ -286,3 +286,14 @@ def test_plain_dict_hooks_are_accepted(jr):
     r = run(jr, api, post_restore_hooks=[{"name": "core.clear_cache", "version": 1, "args": {}}], hook_resolver=res)
     r.wait()
     assert calls == [1]
+
+
+def test_live_api_site_config_reads_configuration_endpoint():
+    """Live Pilot: GET /sites/{s} has no config; maintenance checks must read /configuration."""
+    from fcctl.workflows.provision import LiveApi
+    class P:
+        def get(self, path, **kw):
+            P.path = path
+            return {"maintenance_mode": 1, "pause_scheduler": 1}
+    cfg = LiveApi(P(), None).site_config("a.example.com")
+    assert P.path == "/sites/a.example.com/configuration" and cfg["maintenance_mode"] == 1
