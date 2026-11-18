@@ -285,6 +285,11 @@ def _central(name: str, mod: str = "servers"):
     return call
 
 
+def _pilot(name: str, mod: str):
+    """Lazy callable resolving the raw fcctl.<mod>.<name>._unsafe at approval time (Pilot ops)."""
+    return _central(name, mod)
+
+
 # Op ids as used by the CLI (dotted); @guarded adds the function-name ids on module import.
 REGISTRY: dict[str, _Op] = {
     "server.terminate": _Op(_central("terminate_server"), "central"),
@@ -293,6 +298,12 @@ REGISTRY: dict[str, _Op] = {
     "server.set_termination_protection": _Op(_central("set_termination_protection"), "central"),
     "snapshot.delete": _Op(_central("delete", "snapshots"), "central"),
     "bucket.delete": _Op(_central("delete_bucket", "objects"), "central"),
+    "site.drop": _Op(_pilot("drop_site", "sites"), "pilot"),
+    "site.uninstall_app": _Op(_pilot("uninstall_app", "sites"), "pilot"),
+    "backup.restore": _Op(_pilot("restore", "backups"), "pilot"),
+    "app.remove": _Op(_pilot("remove_app", "apps"), "pilot"),
+    "app.switch_branch": _Op(_pilot("switch_branch", "apps"), "pilot"),
+    "task.cancel": _Op(_pilot("cancel_task", "taskops"), "pilot"),
 }
 _default: Guard | None = None
 

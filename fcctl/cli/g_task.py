@@ -71,7 +71,7 @@ def t_cancel(ctx, args):
     from .. import ops, taskops
     p = ctx.pilot()
     return ops.run_op("task.cancel", args.task_id, lambda: taskops.cancel_task(p, args.task_id),
-                      ctx=ctx.op_context("pilot"))
+                      ctx=ctx.op_context("pilot", args={"task_id": args.task_id}))
 
 
 def register(sub, common):

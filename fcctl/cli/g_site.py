@@ -91,7 +91,7 @@ def s_drop(ctx, args):
     from .g_task import follow
     p = ctx.pilot()
     res = ops.run_op("site.drop", args.site, lambda: sites.drop_site(p, args.site, no_backup=args.no_backup),
-                     ctx=ctx.op_context("pilot"))
+                     ctx=ctx.op_context("pilot", args={"site": args.site, "no_backup": bool(args.no_backup)}))
     return follow(ctx, args, res, "site.drop", site=args.site)
 
 

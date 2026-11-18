@@ -158,3 +158,19 @@ def test_state_dir_is_private(tmp_path):
     finally:
         del os.environ["FCCTL_HOME"]
     assert stat.S_IMODE(loose.stat().st_mode) == 0o700
+
+
+# destructive policy ops with no guarded CLI path (no run_op approval is ever filed for them)
+_NO_APPROVAL_PATH = {"objects.delete", "bucket.rotate_credentials", "backup.offsite_download",
+                     "backup.restore_upload"}
+
+
+def test_every_approval_op_has_registry_entry():
+    from fcctl import policy
+    guard.load_all()
+    missing = [o for o, v in policy.REGISTRY.items()
+               if v["kind"] == "destructive" and o not in _NO_APPROVAL_PATH and o not in guard.REGISTRY]
+    assert not missing, f"policy ops needing approval but not replayable: {missing}"
+    for o, v in policy.REGISTRY.items():
+        if o in guard.REGISTRY:
+            assert guard.REGISTRY[o].kind == v["plane"], o
