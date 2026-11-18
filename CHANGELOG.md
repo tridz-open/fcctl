@@ -4,6 +4,10 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Changed
+- `provision` workflow: new final `release` step (after `hooks`/`config`, before `health`) lifts `maintenance_mode` and `pause_scheduler` set by `isolate`/`reisolate`; it is idempotent (no write if the template already did it) and skipped with `keep_isolated=True`. Previously sites stayed at 503 unless the template added `core.maintenance_off` and `core.scheduler_resume`. `keep_isolated` is a runtime option, not part of the journaled recipe, so journals from before this step resume and run it.
+- `core.set_host_name` and `core.set_fresh_encryption_key` now raise `UsageError` ("Pilot manages host_name; remove core.set_host_name from the template"): Pilot rejects both keys with 422 `protected_configuration`. They stay registered so old templates fail fast.
+
 ### Added
 - Pilot contract guard: `tests/test_pilot_contract.py` checks every public Pilot call (method, path, body and query keys) against the dashboard API extracted by `scripts/extract_pilot_contract.py` (`just contract-refresh`, weekly `contract-refresh` workflow diffs it), plus a fake-conformance check; `DELETE /apps/{}` (`remove_app`) is allowlisted as unverified (P8).
 - `--dry-run` now also prints the request that would be sent (`request`: method, path, params, body; `requests` lists all, max 10) for write ops; existing keys are unchanged and nothing is written.

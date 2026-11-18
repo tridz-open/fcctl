@@ -24,7 +24,7 @@ Login is by email code, giving a Central `sid` cookie (stored Fernet-encrypted i
 
 ## 3. `provision_site` workflow
 
-`provision_site` is one journal entry whose id is the workflow id. It is created `pending`, then immediately moved to `dispatching`, `submitted`, `running` before step 1 starts. Ten steps run in order and each completed step is recorded, so a re-run with the same `--workflow-id` skips what is done. A failure in steps 1-4 (preflight through create_site) leaves the entry `running` and resumable; a failure in steps 5-10 (isolate onward) moves it to `needs_attention`, and `wait()` moves it back to `running` and continues. `isolate` turns on `maintenance_mode` and `pause_scheduler`; `reisolate` reapplies them after the restore. The `restore` step only runs on a site the workflow itself created less than 1 h ago (ownership check), otherwise it raises `PolicyDenied`.
+`provision_site` is one journal entry whose id is the workflow id. It is created `pending`, then immediately moved to `dispatching`, `submitted`, `running` before step 1 starts. Eleven steps run in order and each completed step is recorded, so a re-run with the same `--workflow-id` skips what is done. A failure in steps 1-4 (preflight through create_site) leaves the entry `running` and resumable; a failure in steps 5-11 (isolate onward) moves it to `needs_attention`, and `wait()` moves it back to `running` and continues. `isolate` turns on `maintenance_mode` and `pause_scheduler`; `reisolate` reapplies them after the restore. `release` (after `hooks` and `config`, before `health`) sets both back to 0 unless `keep_isolated=True`; it writes nothing if a template hook already lifted them. Journals written before `release` existed run it on resume. The builtin hooks `core.set_host_name` and `core.set_fresh_encryption_key` always raise `UsageError`, because Pilot protects `host_name` and `encryption_key`. The `restore` step only runs on a site the workflow itself created less than 1 h ago (ownership check), otherwise it raises `PolicyDenied`.
 
 `dispatching` is written (fsync) before any network call. If the call then raises or the process dies, the entry becomes `outcome_unknown` and is never retried silently. `fcctl reconcile --once` (or `fcctl watch`) asks the remote what really happened: it settles the entry as `succeeded` or `failed`, or, only when the remote proves it did not happen and the op's idempotency class allows a safe resend, resubmits it. Otherwise it stays `outcome_unknown` for a human (exit 13). A `dispatching` entry younger than 5 minutes is skipped. Note the `outcome_unknown` arrows come from the guarded-op path (`journal.execute`, used by CLI `run_op`, which wraps the whole `site provision` command in its own `site.create` entry), not from the workflow's own step entry. The workflow's step entry itself only uses `running`, `needs_attention`, `succeeded`.
 
@@ -32,7 +32,7 @@ Login is by email code, giving a Central `sid` cookie (stored Fernet-encrypted i
 
 ![provision_site journal states](assets/provision-site-states.svg)
 
-**The ten steps** (each recorded in the journal; a re-run skips finished steps).
+**The eleven steps** (each recorded in the journal; a re-run skips finished steps).
 
 ![provision_site steps](assets/provision-site-steps.svg)
 
