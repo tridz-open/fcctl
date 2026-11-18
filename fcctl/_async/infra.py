@@ -1,6 +1,8 @@
 """Async server creation catalog: images, offerings, eligible plans."""
 from __future__ import annotations
 
+from typing import Any
+
 from ..region import default_region
 from .central import CentralClient
 
@@ -11,7 +13,7 @@ OPS = {"images": "infra.images", "offerings": "infra.offerings", "plans_eligible
 
 async def images(c: CentralClient, region: str | None = None, offering: str = "pilot", flow: str | None = None,
            offset: int | None = None):
-    p = {"region": region or default_region(), "offering": offering}
+    p: dict[str, Any] = {"region": region or default_region(), "offering": offering}
     if flow:
         p["flow"] = flow
     if offset is not None:

@@ -30,7 +30,7 @@ class AppSource:
 
     @property
     def app_name(self) -> str:
-        return self.name or self.repo.rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
+        return self.name or (self.repo or "").rstrip("/").rsplit("/", 1)[-1].removesuffix(".git")
 
     def spec(self) -> dict:
         return {"name": self.name} if self.name else {"repo": self.repo, "branch": self.branch or "main"}

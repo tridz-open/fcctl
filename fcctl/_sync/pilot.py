@@ -31,7 +31,7 @@ class PilotClient:
         self.http = http or make_http(timeout, UA)
 
     def _cache(self) -> dict:
-        c = self.central
+        c: Any = self.central  # per-central cache attributes are attached dynamically
         if not hasattr(c, "_pilot_tokens"):
             c._pilot_tokens = {}
             c._pilot_server_locks = {}
@@ -39,10 +39,11 @@ class PilotClient:
 
     def _server_lock(self):
         self._cache()
-        return self.central._pilot_server_locks.setdefault(self.server, _io.Lock())
+        central: Any = self.central
+        return central._pilot_server_locks.setdefault(self.server, _io.Lock())
 
     def _fresh(self, s: dict | None) -> bool:
-        return bool(s) and (self.clock() - s["issued_at"]) < self.max_age
+        return s is not None and bool(s) and (self.clock() - s["issued_at"]) < self.max_age
 
     def mint(self) -> dict:
         with self._server_lock():

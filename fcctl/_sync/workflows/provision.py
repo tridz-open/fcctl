@@ -11,7 +11,7 @@ from __future__ import annotations
 from ..pilot import seg
 
 import uuid
-from typing import Callable
+from typing import Any, Callable
 
 from .. import apps as apps_mod, billing, servers, sites, tasks, transfer
 from ... import journal as J
@@ -174,7 +174,7 @@ class ProvisionRun:
     def _entry(self):
         return self.journal.get(self.workflow_id)
 
-    def _save(self, mutate: Callable[[dict], None]):
+    def _save(self, mutate: Callable[[dict], Any]):
         e = self._entry()
         mutate(e.setdefault("wf", {}))
         e["updated_at"] = self.journal.now()

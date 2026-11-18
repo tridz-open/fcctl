@@ -33,6 +33,7 @@ from ..region import default_region
 from .pilot import seg
 
 import os
+from typing import Any
 from pathlib import Path
 
 from ..facade_types import BackupSource
@@ -177,7 +178,7 @@ class Backups:
         s = dict(from_site_backup)
         from . import backups as core
         src = self._c.pilot(s["server"])
-        kw = {"skip_failing_patches": skip_failing_patches}
+        kw: dict[str, Any] = {"skip_failing_patches": skip_failing_patches}
         if s.get("parts"):
             kw["parts"] = tuple(s["parts"])
         if owned_by_workflow:
