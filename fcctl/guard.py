@@ -12,7 +12,16 @@ What it is not: a two-person control. Requester and approver are plain strings t
 secret on one machine can approve their own request by supplying a different approver name. For real
 separation of duties use separate Frappe Cloud accounts with restricted roles.
 
-Env: FCCTL_KEY (signing), FCCTL_APPROVAL_SECRET, FCCTL_USER (requester identity, default OS user),
+Optional hardening: set FCCTL_APPROVER_KEY, a secret SEPARATE from FCCTL_KEY and FCCTL_APPROVAL_SECRET (it must
+differ from both; `approve` refuses otherwise). `approve` then stores an HMAC-SHA256 signature over (approval id,
+op, target, args digest, approver name, timestamp) in the record, and execution verifies it against the verifier's
+FCCTL_APPROVER_KEY; a missing/invalid signature is refused. This only adds real separation when the signing
+key lives with the approver (e.g. a CI job or second machine) and the executing side verifies with the same key
+while the requester never holds it. With FCCTL_APPROVER_KEY unset nothing changes and single-machine
+self-approval remains a speed bump. FCCTL_REQUIRE_SIGNED_APPROVAL=1 (or --require-signed) makes execution reject
+unsigned approvals.
+
+Env: FCCTL_KEY (signing), FCCTL_APPROVAL_SECRET, FCCTL_APPROVER_KEY, FCCTL_REQUIRE_SIGNED_APPROVAL, FCCTL_USER (requester identity, default OS user),
 FCCTL_HOME (store dir: approvals.json, audit.jsonl).
 """
 from __future__ import annotations
@@ -67,6 +76,12 @@ class Tampered(GuardError):
     default_fix = "Restore the original FCCTL_KEY; if it was edited by hand, move approvals.json aside and re-request."
 
 
+class BadApprovalSignature(GuardError):
+    default_why = "The approval carries no valid approver signature for this verifier's FCCTL_APPROVER_KEY."
+    default_fix = ("Have the approver approve with the shared FCCTL_APPROVER_KEY set, and make sure the executing "
+                   "side has the same key; or unset --require-signed / FCCTL_REQUIRE_SIGNED_APPROVAL.")
+
+
 class NotPending(GuardError):
     default_why = "That approval is not pending; it was already executed, denied or expired."
     default_fix = "Check its state with `fcctl approval list`; re-run the command for a new approval."
@@ -87,6 +102,19 @@ class PendingApproval:
     created_at: float = 0.0
     decided_by: str | None = None
     result: object = None
+    approver_sig: str | None = None
+    approved_at: float | None = None
+
+
+def _args_digest(args) -> str:
+    return hashlib.sha256(json.dumps(args, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
+
+
+def approval_signature(key: str, rec: "PendingApproval", approver: str, ts: float) -> str:
+    """HMAC-SHA256 over (id, op, target, args digest, approver, timestamp) with the approver key."""
+    body = json.dumps([rec.id, rec.op, rec.target, _args_digest(rec.args), approver, ts],
+                      separators=(",", ":"), default=str).encode()
+    return hmac.new(key.encode(), body, hashlib.sha256).hexdigest()
 
 
 def new_secret() -> str:
@@ -116,7 +144,8 @@ def totp(secret: str, at: float | None = None, step: int = 30) -> str:
 
 
 class Guard:
-    def __init__(self, home=None, key=None, secret=None, alerter=None, now=time.time, user=None):
+    def __init__(self, home=None, key=None, secret=None, alerter=None, now=time.time, user=None,
+                 approver_key=None, verifier_key=None, require_signed=None):
         self.home = Path(home or os.environ.get("FCCTL_HOME") or Path.home() / ".fcctl")
         private_dir(self.home)
         from .keys import get_key
@@ -125,6 +154,11 @@ class Guard:
             raise GuardError("FCCTL_KEY is not set", why="the approvals store is HMAC-signed with FCCTL_KEY",
                              fix="run: fcctl init")
         self.secret = secret if secret is not None else os.environ.get("FCCTL_APPROVAL_SECRET", "")
+        env = os.environ
+        self.approver_key = approver_key if approver_key is not None else env.get("FCCTL_APPROVER_KEY", "")
+        self.verifier_key = verifier_key if verifier_key is not None else self.approver_key
+        self.require_signed = (require_signed if require_signed is not None
+                               else env.get("FCCTL_REQUIRE_SIGNED_APPROVAL", "") in ("1", "true", "yes"))
         self.alerter, self.now = alerter, now
         self.user = user or os.environ.get("FCCTL_USER") or getpass.getuser()
         self.store_path, self.audit_path = self.home / "approvals.json", self.home / "audit.jsonl"
@@ -233,6 +267,27 @@ class Guard:
         if not ok:
             raise BadToken("invalid approval token")
 
+    def _signature_step(self, rec: PendingApproval, approver: str):
+        """Sign (when an approver key is set) and verify the approval record. Mutates rec only on success."""
+        if self.approver_key and self.approver_key in (self.key.decode(), self.secret):
+            raise GuardError("FCCTL_APPROVER_KEY equals the requester secret",
+                             why="a signing key shared with FCCTL_KEY or FCCTL_APPROVAL_SECRET adds no separation",
+                             fix="set FCCTL_APPROVER_KEY to a distinct secret held only by the approver/verifier")
+        sig, ts, who = rec.approver_sig, rec.approved_at, rec.decided_by or approver
+        if not sig and self.approver_key:
+            ts, who = self.now(), approver
+            sig = approval_signature(self.approver_key, rec, approver, ts)
+        if sig:
+            if not self.verifier_key:
+                if self.require_signed:
+                    raise BadApprovalSignature("cannot verify approval signature: FCCTL_APPROVER_KEY is not set")
+            elif not (ts is not None and hmac.compare_digest(
+                    approval_signature(self.verifier_key, rec, who, ts), sig)):
+                raise BadApprovalSignature(f"approval {rec.id} signature does not verify")
+        elif self.require_signed:
+            raise BadApprovalSignature(f"approval {rec.id} is unsigned and signed approval is required")
+        rec.approver_sig, rec.approved_at = sig, ts
+
     def approve(self, pid: str, approver: str, token: str, client_factory=None):
         recs = self._load()
         rec = recs.get(pid)
@@ -255,6 +310,11 @@ class Guard:
             self._check_token(token)
         except BadToken:
             self.audit("bad_token", rec, approver)
+            raise
+        try:
+            self._signature_step(rec, approver)
+        except GuardError as e:
+            self.audit("signature_rejected", rec, approver, error=str(e))
             raise
         # mark executing (signed + persisted) BEFORE running so a crash/retry cannot double-execute
         rec.status, rec.decided_by = "executing", approver

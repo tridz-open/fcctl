@@ -1,6 +1,8 @@
 """approval: list / show / approve / deny / execute / enroll (wraps fcctl.guard).
 
 A speed bump against accidents and agents, not a two-person control: approver names are not authenticated.
+Optional hardening: set FCCTL_APPROVER_KEY (distinct from FCCTL_KEY and FCCTL_APPROVAL_SECRET) so approvals are
+HMAC-signed and verified at execution; this is real separation only if the requester never holds that key.
 """
 from __future__ import annotations
 
@@ -30,6 +32,15 @@ def show(ctx, args):
 
 
 def approve(ctx, args):
+    g, env = ctx.guard, ctx.env
+    if env.get("FCCTL_APPROVER_KEY"):
+        g.approver_key = env["FCCTL_APPROVER_KEY"]
+        g.verifier_key = g.verifier_key or g.approver_key
+    else:
+        print("fcctl: note: FCCTL_APPROVER_KEY is not set; single-machine self-approval is a speed bump, "
+              "not a two-person control.", file=sys.stderr)
+    if getattr(args, "require_signed", False) or env.get("FCCTL_REQUIRE_SIGNED_APPROVAL") in ("1", "true", "yes"):
+        g.require_signed = True
     approver = args.approver or ctx.guard.user
     return ctx.guard.approve(args.id, approver, _token(ctx, args), ctx.client_factory())
 
@@ -52,13 +63,21 @@ def enroll(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("approval", help="approval step for guarded ops (a speed bump, not a two-person control)", parents=[common])
+    g = sub.add_parser("approval", help="approval step for guarded ops (a speed bump unless FCCTL_APPROVER_KEY is set)",
+                      description="Approval step for guarded ops. Self-approval on one machine is a speed bump, not a "
+                                  "two-person control. Set FCCTL_APPROVER_KEY (a secret distinct from FCCTL_KEY and "
+                                  "FCCTL_APPROVAL_SECRET, held by the approver/verifier, e.g. CI) to sign approvals; "
+                                  "execution then verifies the signature. --require-signed rejects unsigned ones.",
+                      parents=[common])
     gs = g.add_subparsers(dest="approval_cmd", required=True)
     gs.add_parser("list", parents=[common]).set_defaults(func=list_)
     x = gs.add_parser("show", parents=[common]); x.add_argument("id"); x.set_defaults(func=show)
     for name, fn in (("approve", approve), ("execute", execute)):
         x = gs.add_parser(name, parents=[common]); x.add_argument("id")
         x.add_argument("--approver")
+        x.add_argument("--require-signed", action="store_true",
+                       help="reject approvals lacking a valid FCCTL_APPROVER_KEY signature "
+                            "(or set FCCTL_REQUIRE_SIGNED_APPROVAL=1)")
         if name == "approve":
             x.add_argument("--execute", action="store_true", help="(default) execute on approval")
         x.set_defaults(func=fn)
