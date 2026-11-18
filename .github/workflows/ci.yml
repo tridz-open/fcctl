@@ -17,6 +17,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - run: uv venv -p ${{ matrix.python }} && uv pip install -e '.[dev]'
+      - run: uv lock --check
       - run: .venv/bin/ruff check .
       - run: .venv/bin/python scripts/gen_sync.py --check
       - run: .venv/bin/python scripts/gen_commands.py --check
