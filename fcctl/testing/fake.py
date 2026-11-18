@@ -419,6 +419,12 @@ class FakeFrappeCloud:
         if path == "/apps" and meth == "POST":
             self.apps.append({"name": body.get("name") or body.get("repo")})
             return self._start(c, self.new_task("app_add"))
+        am = re.fullmatch(r"/apps/([^/]+)", path)
+        if am and meth == "DELETE":
+            if not any(a["name"] == am.group(1) for a in self.apps):
+                return _pilot_err(404, "not_found")
+            self.apps = [a for a in self.apps if a["name"] != am.group(1)]
+            return self._start(c, self.new_task("app_remove", app=am.group(1)))
         if path == "/apps/fetch" and meth == "POST":
             return self._start(c, self.new_task("fetch_all_app_updates", _output=_json.dumps(
                 {a["name"]: {"has_update": False} for a in self.apps}) + "\n"))

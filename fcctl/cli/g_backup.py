@@ -45,8 +45,9 @@ def b_restore(ctx, args):
     from ..workflows import is_workflow_owned
     from .g_task import follow
     p = ctx.pilot()
-    oc = ctx.op_context("pilot")
     parts = tuple(args.parts) if args.parts else ("database", "public", "private", "config")
+    oc = ctx.op_context("pilot", args={"site": args.site, "parts": list(parts), "backup_timestamp": args.timestamp,
+                                       "skip_failing_patches": bool(args.skip_failing_patches)})
 
     def fn():
         return backups.restore._unsafe(p, args.site, parts=parts, backup_timestamp=args.timestamp,

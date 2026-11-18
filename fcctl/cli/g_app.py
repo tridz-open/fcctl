@@ -33,7 +33,8 @@ def a_remove(ctx, args):
     from .. import apps, ops
     from .g_task import follow
     p = ctx.pilot()
-    res = ops.run_op("app.remove", args.name, lambda: apps.remove(p, args.name), ctx=ctx.op_context("pilot"))
+    res = ops.run_op("app.remove", args.name, lambda: apps.remove(p, args.name),
+                     ctx=ctx.op_context("pilot", args={"name": args.name}))
     return follow(ctx, args, res, "app.remove")
 
 
@@ -59,7 +60,9 @@ def a_uninstall(ctx, args):
     res = ops.run_op("site.uninstall_app", f"{args.site}:{args.name}",
                      lambda: sites.uninstall_app(p, args.site, args.name, force=args.force,
                                                  remove_from_bench=args.remove_from_bench),
-                     ctx=ctx.op_context("pilot"))
+                     ctx=ctx.op_context("pilot", args={"site": args.site, "app": args.name,
+                                                       "force": bool(args.force),
+                                                       "remove_from_bench": bool(args.remove_from_bench)}))
     return follow(ctx, args, res, "site.uninstall_app", site=args.site)
 
 

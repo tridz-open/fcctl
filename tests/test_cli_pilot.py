@@ -247,3 +247,39 @@ def test_site_rename_dry_run_prints_request(ready, capsys):
     assert d["request"]["body"] == {"new_name": "b.x.com", "keep_old_hostname": False}
     assert d["requests"] == [d["request"]]
     assert "a.x.com" in ready.sites and "b.x.com" not in ready.sites
+
+
+@pytest.fixture(autouse=True)
+def _token(monkeypatch):
+    monkeypatch.setenv("FCCTL_APPROVAL_TOKEN", "s3cret")
+
+
+def _approve_only(capsys):
+    rc, out, _ = run(capsys, "approval", "list")
+    pid = json.loads(out)[0]["id"]
+    return run(capsys, "approval", "approve", pid, "--approver", "bob")
+
+
+def test_approved_site_drop_executes(ready, capsys):
+    assert run(capsys, "site", "drop", "a.x.com", "--confirm", "a.x.com", "--yes", *S)[0] == 7
+    assert "a.x.com" in ready.sites
+    rc, out, err = _approve_only(capsys)
+    assert rc == 0, err
+    assert "a.x.com" not in ready.sites
+
+
+def test_approved_app_remove_executes(ready, capsys):
+    assert any(a["name"] == "erpnext" for a in ready.apps)
+    assert run(capsys, "app", "remove", "erpnext", *S)[0] == 7
+    rc, out, err = _approve_only(capsys)
+    assert rc == 0, err
+    assert not any(a["name"] == "erpnext" for a in ready.apps)
+
+
+def test_approved_backup_restore_executes(ready, capsys):
+    assert run(capsys, "backup", "restore", "a.x.com", "20260101_000001", *S)[0] == 7
+    rc, out, err = _approve_only(capsys)
+    assert rc == 0, err
+    posts = [c for c in ready.calls if c.path.endswith("/actions/restore")]
+    assert posts and posts[-1].body["backup_timestamp"] == "20260101_000001"
+    assert posts[-1].body["parts"] == ["database", "public", "private", "config"]
