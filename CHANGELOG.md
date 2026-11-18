@@ -4,6 +4,15 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.1.0a3] - 2026-11-18
+
+### Changed
+- Alpha cleanup (#9): removed the unverified browser code path, tagged commands that have not been run against the live API as `[experimental]` in `--help` (listed in the README), and rewrote `docs/API_IA.md` to separate verified, unverified and not-implemented endpoints.
+- Server and bucket region now come from `--region`, then the `FCCTL_REGION` environment variable, then the `bom` default.
+
+### Documentation
+- README rewritten for first-time readers: alpha banner, what fcctl is and who it is for, install from a release tag, first-run walkthrough, copy-pasteable examples for each verified command, experimental commands table, approval section, library example, production note, related repositories and known gaps.
+
 ## [0.1.0a2] - 2026-11-18
 
 ### Changed
