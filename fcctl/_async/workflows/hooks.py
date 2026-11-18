@@ -70,9 +70,9 @@ async def set_config(ctx, config: dict | None = None, **kw):
     await _patch_config(ctx, dict(config if config is not None else kw))
 
 
-async def set_host_name(ctx, host_name: str):
-    """Sets `host_name` in site config (what `bench set-config host_name` does)."""
-    await _patch_config(ctx, {"host_name": host_name})
+async def set_host_name(ctx, host_name: str | None = None):
+    """Sets `host_name` in site config (what `bench set-config host_name` does); defaults to https://<site>."""
+    await _patch_config(ctx, {"host_name": host_name or f"https://{ctx.site}"})
 
 
 async def clear_cache(ctx):
