@@ -1,8 +1,21 @@
 # fcctl
 
-> **Experimental. Built on a pre-public API.** fcctl talks to Frappe Cloud's private dashboard and Pilot endpoints, which are not a published API and can change without notice. Expect breaking changes between 0.x releases, pin a version, and try writes on a throwaway site first. See [Status](#status-alpha-unofficial-api).
+> **ALPHA SOFTWARE. Bleeding edge. Read before you use it.**
+>
+> - fcctl is early-stage (0.1.0 alpha). It works against real Frappe Cloud accounts, but it is young.
+> - It talks to Frappe Cloud's **pre-public dashboard and Pilot API**. That API is not documented or published, and it can change or disappear without notice. Any command can break when it does.
+> - **Breaking changes are expected** between releases: the CLI, the library and the on-disk formats can all change.
+> - **Pin an exact version** (a release tag) and upgrade deliberately.
+> - **Try writes on throwaway sites and a non-production team first.**
+> - **Not affiliated with or endorsed by Frappe Technologies.** "Frappe" and "Frappe Cloud" are their trademarks.
 
-A Python 3.11+ CLI and library for Frappe Cloud v2. It covers both halves of the platform: Central (`dashboard.frappe.io`: team, billing, servers, snapshots, buckets) and Pilot (the gateway on each server: sites, apps, backups, tasks, logs). It adds a safety layer on top: per-profile policies, approval for destructive operations, a local journal so interrupted operations can be reconciled, and a hash-chained audit log.
+## What is fcctl?
+
+fcctl is a command-line tool and Python library that drives [Frappe Cloud](https://frappecloud.com) from your terminal or your code. With it you can list servers and sites, install apps, take and restore backups, read logs, follow background tasks, edit site config, rename or drop sites, and provision whole new sites from a backup, all without clicking through the dashboard.
+
+On top of the raw calls it adds a safety layer: per-profile policies, an approval step for destructive operations, a local journal so interrupted operations can be reconciled, and a hash-chained audit log.
+
+**Who it is for:** developers and operators who run sites on Frappe Cloud and want to script them, and teams building a Frappe SaaS that needs to create and manage customer sites automatically. If you only manage a couple of sites by hand, the dashboard is the better tool.
 
 ## Why it exists
 
@@ -18,18 +31,9 @@ fcctl is built by Tridz Technologies, a team that builds on Frappe Cloud. We wro
 - We will move to an official API or token flow the moment one exists, and we are happy to change, rate-limit or take this project down on request.
 - Contact: open an issue on this repository, or see [SECURITY.md](SECURITY.md) for security reports.
 
-## Status: alpha, unofficial API
+## Contents
 
-Read this before using fcctl.
-
-- **Not affiliated with or endorsed by Frappe Technologies.** "Frappe" and "Frappe Cloud" are their trademarks.
-- **fcctl uses the private dashboard API.** fcctl calls the same HTTP endpoints the Frappe Cloud web dashboard calls, signed in with your own account. Frappe has not documented or published these endpoints as a public API. They can change or disappear without notice, and any fcctl command can break when they do. Pin a version, and test against a non-production team first.
-- **Some request bodies are unverified.** Many endpoints were mapped by reading the open-source code rather than by calling them live; `docs/API_IA.md` separates what is verified live, what is implemented but unverified, and what is not implemented. Treat every write you have not tried yourself as experimental.
-- **Your Frappe Cloud terms still apply.** You are responsible for using fcctl within them. Automated sign-in (the IMAP option below) and automation in general may be restricted. If you plan to run fcctl unattended or at volume, ask Frappe first. fcctl never solves CAPTCHAs or Cloudflare challenges: when one appears, it stops with exit code 10.
-- **The safety layer guards against mistakes, not attackers.** Anyone who holds your session can call the API directly and bypass every fcctl check. For the full model, see [Safety model](#safety-model).
-- **The interfaces may change.** The CLI, the library and the on-disk formats can change between 0.x releases.
-
-Please report bugs and API drift as issues. Do not open issues with Frappe about fcctl behaviour.
+[Install](#install) · [First run](#first-run) · [Usage examples](#usage-examples) · [Experimental commands](#experimental-commands) · [Safety and approvals](#safety-model) · [Library](#library) · [How it is used in production](#how-it-is-used-in-production) · [Related repositories](#related-repositories) · [Known gaps](#known-gaps) · [Contributing, security, license](#contributing-security-and-license)
 
 ## Prerequisites
 
@@ -37,42 +41,49 @@ Please report bugs and API drift as issues. Do not open issues with Frappe about
 - A Frappe Cloud v2 account, plus the id of the team you want to manage (`TEAM-xxxxx`, shown in the dashboard).
 - Access to that account's mailbox. Sign-in works by a 6-digit code sent by email; fcctl does not support passwords or API keys.
 - To manage sites on a server, your role needs the `server:console` capability. Without it, fcctl cannot get a Pilot token.
-- Optional: [uv](https://docs.astral.sh/uv/) or pipx, to install fcctl as a tool.
+- [uv](https://docs.astral.sh/uv/) or pipx (recommended, to install fcctl as a tool).
 
 ## Install
 
-fcctl is not on PyPI yet. Install from a clone:
+fcctl is not on PyPI. Install it from a release tag and pin that tag. Tags are listed on the [releases page](https://github.com/tridz-open/fcctl/tags); replace `v0.1.0-alpha.2` below with the tag you want.
 
 ```bash
-git clone https://github.com/tridz-open/fcctl.git
-cd fcctl
+# uv (recommended): puts `fcctl` on your PATH
+uv tool install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.2"
 
-# Option A: uv (recommended)
-uv tool install .                 # puts `fcctl` on your PATH
-# or, for development:
-uv venv && uv pip install -e '.[dev]'
+# or pipx
+pipx install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.2"
 
-# Option B: pipx
-pipx install .
-
-# Option C: plain pip in a virtualenv
+# or pip, inside a virtualenv
 python3 -m venv .venv && . .venv/bin/activate
-pip install -e '.[dev]'
+pip install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.2"
 ```
 
-Optional extras:
+If the repository is private to you, make sure git can authenticate to GitHub (for example `gh auth login`).
 
-| Extra | Adds | Needed for |
-|---|---|---|
-| `yaml` | pyyaml | `-o yaml` output |
+From a local clone (this is also how to develop on it):
 
-Check the install with `fcctl --help`, `fcctl version` and `fcctl guide`.
+```bash
+git clone https://github.com/tridz-open/fcctl.git && cd fcctl
+uv tool install .
+# or: uv venv && uv pip install -e '.[dev]'
+```
+
+Check the install:
+
+```bash
+fcctl --version      # prints the installed version, e.g. fcctl 0.1.0a3
+fcctl --help
+fcctl guide          # built-in usage guide
+```
+
+Optional extra: `.[yaml]` adds pyyaml for `-o yaml` output.
 
 ## First run
 
 ### 1. Create an encryption key
 
-fcctl encrypts your session (the dashboard `sid` cookie, the CSRF token, and Pilot tokens) with a Fernet key, and uses the same key to sign its approval records. Generate the key once and keep it somewhere safe, such as a password manager or the OS keychain:
+fcctl encrypts your session (the dashboard `sid` cookie, the CSRF token and Pilot tokens) with a Fernet key, and uses the same key to sign its approval records. Generate it once and keep it somewhere safe, such as a password manager or the OS keychain:
 
 ```bash
 export FCCTL_KEY=$(python3 -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())")
@@ -94,9 +105,9 @@ To set a different policy, pass `--policy full|guarded|read_only|protected`. To 
 
 ### 3. Sign in
 
-Pick one of three ways to enter the code.
+fcctl emails you a 6-digit code. Pick one way to enter it.
 
-**Manual (interactive):** fcctl emails a code and prompts you for it:
+**Manual (interactive):**
 
 ```bash
 fcctl auth login
@@ -108,7 +119,7 @@ fcctl auth login
 read -r CODE && echo "$CODE" | fcctl auth login --code-stdin
 ```
 
-**IMAP auto-login (unattended):** fcctl requests the code, then polls a mailbox for the message from Frappe Cloud. Use a dedicated mailbox and an app password (for Gmail, an app password with IMAP enabled), never your main password:
+**IMAP auto-login (unattended):** fcctl requests the code, then polls a mailbox for the message from Frappe Cloud. Use a dedicated mailbox and an app password, never your main password:
 
 ```bash
 export FCCTL_IMAP_HOST=imap.gmail.com
@@ -117,9 +128,9 @@ export FCCTL_IMAP_PASS='app-password'        # better: read it from your keychai
 fcctl auth login --code-source imap
 ```
 
-fcctl accepts only messages that arrive after the login request starts, so an old code is never reused.
+fcctl accepts only messages that arrive after the login request starts, so an old code is never reused. Your Frappe Cloud terms still apply: if you plan to run fcctl unattended or at volume, check them first. fcctl never solves CAPTCHAs or Cloudflare challenges; when one appears it stops with exit code 10.
 
-Then confirm the session:
+### 4. Check everything
 
 ```bash
 fcctl auth whoami            # add --caps to list your capabilities
@@ -128,43 +139,82 @@ fcctl doctor                 # checks the key, config, profile and session
 
 ## Usage examples
 
-**Sign in once, then check the session**
+Replace `server-xxxx` with your server id (`fcctl server list` shows them) and the site names with your own. You can also set `FCCTL_SERVER` instead of passing `-s` every time. Add `--dry-run` to any write to see what it would do without sending it.
+
+**Sites**
 
 ```bash
-fcctl profile create work --email you@example.com --team TEAM-xxxxx
-fcctl profile use work
-fcctl auth login                       # emails you a code; paste it
-fcctl doctor                           # key, config, profile and session
+fcctl server list                                     # servers in the team (Central)
+fcctl site list -s server-xxxx                        # sites on one server (Pilot)
+fcctl site get shop.example.com -s server-xxxx
+fcctl site maintenance shop.example.com on -s server-xxxx
 ```
 
-**Install a marketplace app on a site**
+**Install an app on a site** (fetches and installs in one step, the same call the dashboard makes):
 
 ```bash
-# Fetch and install in one step, the same call the dashboard makes.
 fcctl app add india_compliance --site shop.example.com -s server-xxxx
-
-# [experimental] Add to the bench only (no site); runs the bench validator. Not live-tested.
-fcctl app add hrms -s server-xxxx
-
-# [experimental] A private or forked app from GitHub, on a specific branch. Not live-tested.
-fcctl app add --repo https://github.com/you/your_app --branch main -s server-xxxx
+fcctl app list -s server-xxxx
 ```
 
-**Provision a customer site (preview first)**
+**Backups** (take one before any risky change):
 
 ```bash
-fcctl site provision acme.example.com -s server-xxxx \
-  --app erpnext --app hrms --dry-run       # shows the plan, changes nothing
+fcctl backup list shop.example.com -s server-xxxx
+fcctl backup create shop.example.com -s server-xxxx     # waits for the task by default
+```
+
+**Logs**
+
+```bash
+fcctl logs list -s server-xxxx
+fcctl logs tail FILENAME --lines 100 -s server-xxxx     # add -f to follow
+```
+
+**Tasks** (long operations run as background tasks):
+
+```bash
+fcctl task list -s server-xxxx
+fcctl task wait TASK_ID -s server-xxxx          # Ctrl-C detaches (exit 130); the task keeps running
+fcctl task output TASK_ID -s server-xxxx        # full log, useful for a failed task
+```
+
+**Site config**
+
+```bash
+fcctl site config get shop.example.com -s server-xxxx
+fcctl site config set shop.example.com KEY=VALUE -s server-xxxx
+```
+
+**Rename a site**
+
+```bash
+fcctl site rename shop.example.com store.example.com -s server-xxxx            # add --keep-old-hostname to keep the old name
+```
+
+**Drop a site, through approval.** Dropping is destructive, so under the default `guarded` policy it is filed for approval and exits with code 7 instead of running (`--no-backup` skips the pre-drop backup; avoid it):
+
+```bash
+fcctl site drop old.example.com -s server-xxxx --dry-run      # decision: NeedsApproval
+fcctl site drop old.example.com -s server-xxxx                # files the request, exit 7
+fcctl approval list
+fcctl approval approve APPROVAL_ID --approver alice           # approves and executes
+```
+
+See [Safety model](#safety-model) for how approval tokens work.
+
+**Provision a new site** (resumable workflow; preview first):
+
+```bash
+fcctl site provision acme.example.com -s server-xxxx --app erpnext --app hrms --dry-run
 fcctl site provision acme.example.com -s server-xxxx --app erpnext --app hrms
+
+# From a golden backup of another site (profile:site:timestamp), with a config value:
+fcctl site provision acme.example.com -s server-xxxx --app erpnext \
+  --from-backup me:template.example.com:TIMESTAMP --config KEY=VALUE
 ```
 
-**Back up before a risky change, and wait on long tasks**
-
-```bash
-fcctl backup create acme.example.com -s server-xxxx   # waits by default
-fcctl task list -s server-xxxx -o json | jq '.[0] | {command, status}'
-fcctl task output TASK_ID -s server-xxxx   # full log of a failed task
-```
+An interrupted run can be resumed with `--workflow-id ID`. See `fcctl site provision --help` for `--hook`, `--max-age` and `--bench-app`.
 
 **Script it: JSON out, exit codes in**
 
@@ -172,58 +222,35 @@ fcctl task output TASK_ID -s server-xxxx   # full log of a failed task
 if ! fcctl site get acme.example.com -s server-xxxx -o json > site.json; then
   echo "lookup failed with exit $?"   # 3 auth, 5 not found, 10 Cloudflare challenge ...
 fi
+fcctl audit verify                    # check the local audit chain
+fcctl auth logout                     # ends the server session too
 ```
 
-**From Python**
-
-```python
-from fcctl import Client
-from fcctl.session_store import SessionStore
-
-c = Client(SessionStore(), team="TEAM-xxxxx")   # uses the session from `fcctl auth login`
-for site in c.sites.list("server-xxxx"):
-    print(site["name"], site.get("status"))
-c.close()
-```
-
-## Common commands
-
-```bash
-fcctl server list                                   # servers in the team (Central)
-fcctl site list -s server-xxxx                      # sites on one server (Pilot)
-fcctl site get mysite.example.com -s server-xxxx
-fcctl backup list mysite.example.com -s server-xxxx
-fcctl backup create mysite.example.com -s server-xxxx
-fcctl site maintenance mysite.example.com on -s server-xxxx
-fcctl site provision demo.example.com -s server-xxxx --app erpnext --dry-run   # preview only
-fcctl task wait TASK_ID -s server-xxxx              # Ctrl-C detaches (exit 130); the task keeps running
-fcctl audit verify                                  # check the local audit chain
-fcctl auth logout                                   # ends the server session too
-```
-
-Global flags: `--profile`, `-s/--server`, `-o table|json|yaml|ndjson` (json when stdout is not a terminal), `--wait/--no-wait`, `--timeout`, `--dry-run`, `--confirm`, `--no-progress`, `--debug`. Data goes to stdout; progress and errors go to stderr. Run `fcctl <group> --help` for any group.
+Global flags: `--profile`, `-s/--server`, `-o table|json|yaml|ndjson` (json when stdout is not a terminal), `--wait/--no-wait`, `--timeout`, `--dry-run`, `--confirm`, `--yes`, `--no-progress`, `--debug`. Data goes to stdout; progress and errors go to stderr. Run `fcctl <group> --help` for any group.
 
 Command groups: `auth profile server snapshot bucket billing notification app site backup task logs fleet approval audit reconcile watch alert doctor api guide completion version`.
 
 Exit codes: 0 ok, 2 usage, 3 auth, 4 policy/permission, 5 not found, 6 conflict, 7 approval pending, 8 wait timeout (the remote operation keeps running), 9 task failed, 10 Cloudflare challenge, 11 rate limited, 12 validation, 13 outcome unknown, 130 interrupted.
 
-## Environment variables
+## Experimental commands
 
-| Variable | Purpose |
+These are implemented and covered by offline tests (respx and the in-process fake), but have not been run against the live Frappe Cloud API. Request bodies and response shapes may be wrong. Try them on throwaway resources first. Each is tagged `[experimental]` in `--help`.
+
+| Command | Why experimental |
 |---|---|
-| `FCCTL_KEY` | **Required.** Fernet key that encrypts the session and signs approvals |
-| `FCCTL_HOME` | State directory (default `~/.fcctl`) |
-| `FCCTL_PROFILE` | Profile to use (overrides `profile use`) |
-| `FCCTL_EMAIL`, `FCCTL_TEAM`, `FCCTL_SERVER` | Defaults when there is no profile / no `-s` |
-| `FCCTL_IMAP_HOST`, `FCCTL_IMAP_USER`, `FCCTL_IMAP_PASS` | IMAP auto-login (`--code-source imap`) |
-| `FCCTL_APPROVAL_SECRET` | Base32 approver secret for guarded operations (`fcctl approval enroll` generates one) |
-| `FCCTL_APPROVAL_TOKEN` | Approval token or authenticator code (otherwise `approve` prompts for it) |
-| `FCCTL_USER` | Requester identity recorded on approvals (default: OS user) |
-| `FCCTL_SMTP_HOST/PORT/USER/PASS`, `FCCTL_ALERT_FROM`, `FCCTL_ALERT_TO` | Email alerts |
-| `FCCTL_TG_TOKEN`, `FCCTL_TG_CHAT` | Telegram alerts |
-| `FCCTL_POLL` | Pilot task poll interval in seconds (default 15) |
+| `app add NAME -s SERVER` (bench-only, no `--site`) | not live-tested; the bench validator can reject it |
+| `app add --repo URL` | name resolution is contract-tested only |
+| `app check-updates` | not live-tested |
+| `app remove` | not live-tested |
+| `backup restore` (full restore) | not live-tested; the approval gate stopped the live attempt |
+| `server create / start / stop / restart / resize / protect / terminate` | Central writes, not live-tested |
+| `snapshot take / delete` | Central writes, not live-tested |
+| `bucket create / quota / delete / put` | Central writes, not live-tested |
+| `billing health` | computed from field names that are not live-verified (billing has no write commands) |
 
-Pass secrets through the environment or a secret manager. Don't put them in command-line arguments, which end up in shell history and `ps` output.
+Live-verified on Frappe Cloud (Pilot): site create, rename, drop (through the approval gate), app install and `app add --site`, config, logs, backup create/list/schedule, cross-site backup upload, task output, and the full provision workflow from a golden backup (hooks, release, health). The endpoint catalogue in [docs/API_IA.md](docs/API_IA.md) separates verified, unverified and not-implemented calls.
+
+Region for server and bucket creation defaults to `bom`; set `FCCTL_REGION` (for example `blr`) or pass `--region` to change it.
 
 ## Safety model
 
@@ -250,6 +277,24 @@ Every write passes through the safety layer before any API call:
 - Pilot tokens are bench-scoped: holding one gives full control of every site on that server.
 
 For real separation of duties, use separate Frappe Cloud accounts with restricted roles.
+
+## Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `FCCTL_KEY` | **Required.** Fernet key that encrypts the session and signs approvals |
+| `FCCTL_HOME` | State directory (default `~/.fcctl`) |
+| `FCCTL_PROFILE` | Profile to use (overrides `profile use`) |
+| `FCCTL_EMAIL`, `FCCTL_TEAM`, `FCCTL_SERVER` | Defaults when there is no profile / no `-s` |
+| `FCCTL_IMAP_HOST`, `FCCTL_IMAP_USER`, `FCCTL_IMAP_PASS` | IMAP auto-login (`--code-source imap`) |
+| `FCCTL_APPROVAL_SECRET` | Base32 approver secret for guarded operations (`fcctl approval enroll` generates one) |
+| `FCCTL_APPROVAL_TOKEN` | Approval token or authenticator code (otherwise `approve` prompts for it) |
+| `FCCTL_USER` | Requester identity recorded on approvals (default: OS user) |
+| `FCCTL_SMTP_HOST/PORT/USER/PASS`, `FCCTL_ALERT_FROM`, `FCCTL_ALERT_TO` | Email alerts |
+| `FCCTL_TG_TOKEN`, `FCCTL_TG_CHAT` | Telegram alerts |
+| `FCCTL_POLL` | Pilot task poll interval in seconds (default 15) |
+
+Pass secrets through the environment or a secret manager. Don't put them in command-line arguments, which end up in shell history and `ps` output.
 
 ## Where state lives
 
@@ -288,6 +333,10 @@ To test your own code, `fcctl.testing.FakeFrappeCloud` provides an in-process fa
 
 How it fits together, with diagrams (request path, safety layer, auth flow, provisioning states, cross-server restore): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+## How it is used in production
+
+fcctl powers a SaaS control plane (`saas_core`, a Frappe app) that provisions customer sites on Frappe Cloud from a golden backup: it creates the site, restores the template, runs setup hooks, lifts maintenance mode and checks health, with destructive steps held behind approval. fcctl itself is product-neutral, so any Frappe SaaS can use it the same way.
+
 ## Development
 
 ```bash
@@ -303,31 +352,22 @@ The tests mock all HTTP with respx and an in-process fake, so they never call Fr
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). Endpoint catalogue: [docs/API_IA.md](docs/API_IA.md).
 
+## Related repositories
+
+- [tridz-open/frappe-saaskit-sdk](https://github.com/tridz-open/frappe-saaskit-sdk): `@frappe-saaskit` TypeScript SDK (client, React, Vue, Node, mock) for apps that talk to a `saas_core` backend.
+- [tridz-open/frappe-saaskit-starter](https://github.com/tridz-open/frappe-saaskit-starter): React + Vite SaaS starter for Frappe (`saas_core`).
+
+## Contributing, security and license
+
+- Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md) and the [CHANGELOG](CHANGELOG.md). Please report bugs and API drift as issues on this repository, not to Frappe.
+- Security reports: see [SECURITY.md](SECURITY.md). Do not open public issues for vulnerabilities.
+- License: MIT, see [LICENSE](LICENSE). Copyright (c) 2026 Tridz Technologies.
+
 ## Known gaps
 
-- Many request bodies are unverified (see `docs/API_IA.md`).
+- Many request bodies are unverified (see `docs/API_IA.md`), and the whole API is unofficial.
 - CSRF refresh falls back to reading the dashboard boot page, which is fragile.
 - The API has no in-place snapshot restore.
 - No MCP server yet.
-- Live-verified on Frappe Cloud (Pilot): site create, rename, drop (through the approval gate), app install / `app add --site`, config, logs, backup create/list/schedule, cross-site backup upload, task output, and the full provision workflow from a golden backup (hooks, release, health).
-- Not yet live-tested: see [Experimental commands](#experimental-commands). Their `--help` text starts with `[experimental]`.
-
-## Experimental commands
-
-These are implemented and covered by offline tests (respx and the in-process fake), but have not been run against the live Frappe Cloud API. Request bodies and response shapes may be wrong. Try them on throwaway resources first. Each is tagged `[experimental]` in `--help`.
-
-| Command | Why experimental |
-|---|---|
-| `app add NAME -s SERVER` (bench-only, no `--site`) | not live-tested; the bench validator can reject it |
-| `app add --repo URL` | name resolution is contract-tested only |
-| `app check-updates` | not live-tested |
-| `app remove` | not live-tested |
-| `backup restore` (full restore) | not live-tested; the approval gate stopped the live attempt |
-| `server create / start / stop / restart / resize / protect / terminate` | Central writes, not live-tested |
-| `snapshot take / delete` | Central writes, not live-tested |
-| `bucket create / quota / delete / put` | Central writes, not live-tested |
-| `billing health` | computed from field names that are not live-verified (billing has no write commands) |
-
-## License
-
-MIT, see [LICENSE](LICENSE). Copyright (c) 2026 Tridz Technologies.
+- Everything under [Experimental commands](#experimental-commands) is untested against the live API.
+- The safety layer is a speed bump against mistakes, not access control (see [Safety model](#safety-model)).
