@@ -98,7 +98,7 @@ def execute_decision(decision, label, target, fn, ctx: OpContext, *, is_read=Fal
         rec = ctx.guard.request(label, target, dict(ctx.args), kind=ctx.kind, server=ctx.server)
         _audit(ctx, label, target, "approval_requested", approval_id=rec.id)
         err = ApprovalPending(f"approval {rec.id} pending for {label} on {target}")
-        err.approval_id = rec.id
+        err.approval_id = rec.id  # type: ignore[attr-defined]  # dynamic attribute read by the CLI renderer
         raise err
     if isinstance(decision, pol.NeedsConfirm) and not _confirmed(ctx, target):
         _audit(ctx, label, target, "confirm_missing")

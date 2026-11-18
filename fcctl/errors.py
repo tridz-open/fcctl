@@ -174,10 +174,12 @@ def format_error(e: BaseException) -> str:
         fix = GENERIC_FIX
     lines = [f"error: {what}", f"why: {why}", f"fix: {fix}"]
     ids = []
-    if getattr(e, "request_id", None):
-        ids.append(f"request_id={e.request_id}")
-    if getattr(e, "cf_ray", None):
-        ids.append(f"cf-ray={e.cf_ray}")
+    request_id = getattr(e, "request_id", None)
+    cf_ray = getattr(e, "cf_ray", None)
+    if request_id:
+        ids.append(f"request_id={request_id}")
+    if cf_ray:
+        ids.append(f"cf-ray={cf_ray}")
     if ids:
         lines.append(" ".join(ids))
     return redact("\n".join(l.replace("\n", " ") for l in lines))
@@ -188,6 +190,7 @@ def exit_code_for(exc: BaseException) -> int:
         return 130
     if isinstance(exc, FcError):
         return exc.exit_code
+    guard: Any
     try:
         from . import guard
     except Exception:  # pragma: no cover

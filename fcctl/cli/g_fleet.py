@@ -56,8 +56,8 @@ def _execute(ctx, args, rid: str, resume: bool) -> object:
     from .g_task import poll_interval
     e = ctx.journal.get(rid)
     fl = e["fleet"]
-    op_id, mod, fn_name = OPS[fl["op"]]
-    mod = __import__(f"fcctl.{mod}", fromlist=["x"])
+    op_id, mod_name, fn_name = OPS[fl["op"]]
+    mod = __import__(f"fcctl.{mod_name}", fromlist=["x"])
     fn = getattr(mod, fn_name)
     # build clients up front (ctx caches are not thread safe)
     servers = sorted({i["server"] for i in fl["items"]})

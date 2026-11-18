@@ -40,6 +40,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote
 
 from ._fs import open_private, private_dir
@@ -360,7 +361,7 @@ class Guard:
 # ---- registry + decorator ----
 @dataclass
 class _Op:
-    fn: object
+    fn: Any
     kind: str
 
 

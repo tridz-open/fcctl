@@ -35,11 +35,11 @@ class Detached(FcError):
 
 class _Handle:
     def to_dict(self) -> dict:
-        return asdict(self)
+        return asdict(self)  # type: ignore[call-overload]  # subclasses are dataclasses
 
     @classmethod
     def from_dict(cls, d: dict):
-        names = {f.name for f in fields(cls)}
+        names = {f.name for f in fields(cls)}  # type: ignore[arg-type]  # subclasses are dataclasses
         return cls(**{k: v for k, v in d.items() if k in names})
 
 

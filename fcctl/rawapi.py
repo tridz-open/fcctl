@@ -43,7 +43,7 @@ def call_raw(ctx: OpContext, plane: str, method: str, path: str, body=None, conf
     is_read = method == "GET" or (meta is not None and meta["kind"] == "read")
     label = meta["op_id"] if meta else RAW_OP
     if is_read:
-        decision = pol.Allow()
+        decision: pol.Decision = pol.Allow()
     else:
         decision = pol.check((method, path), ctx.eff)
         if guarded and not isinstance(decision, pol.Deny):

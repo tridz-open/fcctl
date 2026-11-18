@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import argparse
 import re
+from typing import Any
 
 SHELLS = ("bash", "zsh", "fish")
 _FILE_DESTS = {"file", "dest", "data", "out"}
@@ -33,7 +34,7 @@ def _takes_arg(a: argparse.Action) -> bool:
 
 
 def _walk(parser: argparse.ArgumentParser, name: str, help: str) -> dict:
-    node = {"name": name, "help": help, "subs": [], "opts": [], "pos": []}
+    node: dict[str, Any] = {"name": name, "help": help, "subs": [], "opts": [], "pos": []}
     for a in parser._actions:
         if isinstance(a, argparse._SubParsersAction):
             helps = {id(ca): None for ca in a._choices_actions}

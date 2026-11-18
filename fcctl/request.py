@@ -135,6 +135,11 @@ class CentralClient:
     `reauth` (fcctl.reauth.Reauther) is invoked once on Auth/Csrf errors. Cloudflare challenges are raised, never solved.
     """
 
+    # Lazily created by PilotClient._cache (in-memory pilot token cache shared per client).
+    _pilot_tokens: dict[str, Any]
+    _pilot_lock: threading.Lock
+    _pilot_server_locks: dict[str, threading.Lock]
+
     def __init__(self, store: SessionStore, team: str | None = None, base: str = CENTRAL_BASE,
                  http: httpx.Client | None = None, timeout: float = 60.0,
                  retry: _retry.RetryPolicy | None = None, sleep=None):
@@ -235,7 +240,7 @@ class PilotClient:
             return self.central._pilot_server_locks.setdefault(self.server, threading.Lock())
 
     def _fresh(self, s: dict | None) -> bool:
-        return bool(s) and (self.clock() - s["issued_at"]) < self.max_age
+        return s is not None and bool(s) and (self.clock() - s["issued_at"]) < self.max_age
 
     def mint(self) -> dict:
         """central.api.sso.get_bench_link?server=<id> -> data.url = <gateway>/?sid=<JWT>. Single-flight."""

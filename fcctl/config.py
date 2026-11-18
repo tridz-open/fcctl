@@ -6,7 +6,7 @@ import stat
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Mapping
+from typing import Any, Mapping
 
 from ._fs import private_dir
 from .policy import EffectivePolicy, resolve_policy
@@ -123,7 +123,7 @@ class ProfileStore:
 
     def set(self, profile: Profile) -> Profile:
         d = self._data()
-        row = {"email": profile.login, "team": profile.team, "policy": profile.policy}
+        row: dict[str, Any] = {"email": profile.login, "team": profile.team, "policy": profile.policy}
         if profile.allow:
             row["allow"] = list(profile.allow)
         for k in ("owner", "owner_id", "session_store", "session_ref"):
@@ -187,7 +187,8 @@ def check_owner(profile: Profile, env: Mapping[str, str] | None = None) -> None:
 
 
 def conflicts(profiles: list[Profile]) -> list[str]:
-    out, seen = [], set()
+    out: list[str] = []
+    seen: set = set()
     for p in profiles:
         k = (p.login, p.team)
         if k in seen:
@@ -267,6 +268,7 @@ def resolve_credentials(explicit: Credentials | Mapping[str, str] | None = None,
                         env: Mapping[str, str] | None = None, env_file: Path | str | None = None,
                         profile: Profile | None = None) -> Credentials:
     env = os.environ if env is None else env
+    c: Credentials | None
     if explicit:
         c = explicit if isinstance(explicit, Credentials) else Credentials(
             explicit.get("login"), explicit.get("sid"), explicit.get("csrf"), "explicit")

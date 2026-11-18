@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from .request import CentralClient
 
 M = "central.notification.api."
@@ -11,7 +13,7 @@ OPS = {"list_notifications": "notification.list", "badge": "notification.badge",
 def list_notifications(c: CentralClient, unread_only: bool = False, start: int = 0, limit: int = 20,
                        category: str | None = None):
     """GET; unread_only is sent as 0/1."""
-    p = {"start": start, "limit": limit, "unread_only": int(bool(unread_only))}
+    p: dict[str, Any] = {"start": start, "limit": limit, "unread_only": int(bool(unread_only))}
     if category:
         p["category"] = category
     return c.call("GET", M + "list_notifications", params=p)
