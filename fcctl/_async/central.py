@@ -2,11 +2,11 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Callable
+from typing import Any
 
 import httpx
 
-from ..request import AuthError, CloudflareChallenge, CsrfError, DryRunRecorder, raise_for_central
+from ..request import AuthError, CsrfError, DryRunRecorder, raise_for_central
 from ..session_store import SessionStore
 from .transport import CENTRAL_BASE, UA, make_http
 
@@ -17,8 +17,6 @@ class CentralClient:
         self.store, self.team, self.base = store, team or store.data.get("team"), base.rstrip("/")
         self.http = http or make_http(timeout, UA)
         self.reauth: Any = None
-        self.fallback: Callable[[str, str, Any], Any] | None = None
-        self.mode_used = "http"
 
     def path(self, dotted: str) -> str:
         return f"/api/v2/method/{dotted}"
@@ -63,23 +61,12 @@ class CentralClient:
         if DryRunRecorder.record(method, dotted, params, json):
             return {}
         try:
-            self.mode_used = "http"
             return await self._once(method, dotted, params, json, team)
         except (AuthError, CsrfError) as e:
             if _retried or not self.reauth:
                 raise
             self.reauth.recover(scope="central", error=e)
             return await self.call(method, dotted, params, json, team, _retried=True)
-        except CloudflareChallenge:
-            if not self.fallback:
-                raise
-            import warnings
-            warnings.warn("The browser fallback is deprecated and will be removed; fcctl never solves "
-                          "challenges.", DeprecationWarning, stacklevel=2)
-            self.mode_used = "browser"
-            q = self._team_q(method, params, team)
-            path = self.path(dotted) + (("?" + str(httpx.QueryParams(q))) if q else "")
-            return self.fallback(method.upper(), path, self._team_body(method, json, team))
 
     async def logout_remote(self) -> bool:
         """Best-effort server-side logout (Frappe /api/method/logout) with the stored sid.

@@ -38,8 +38,9 @@ First public alpha.
 - `fcctl.testing.FakeFrappeCloud`: in-process fake of Central and Pilot for offline tests.
 - State directory created 0700 with files 0600; honest `User-Agent`.
 
-### Deprecated
-- `fcctl.browser.Browser` and the `browser` extra (Playwright fallback). Emits `DeprecationWarning`; will be removed.
+### Removed before first release
+- Playwright browser support (`fcctl.browser`, the `browser` extra, the `CentralClient.fallback` hook, `Reauther(browser=...)`). fcctl never solves challenges; login is the plain HTTP email-code path.
+- Unused and unverified helpers: `snapshots.keep/set_automatic/pricing/restore_as_new_server`, `servers.clone_from_snapshot/action_status`, `objects.list_objects/delete_objects/rotate_credentials/s3_copy` and the `s3` extra, `monitor.monitor_status` (the route returns a log-file list, not a status), and the legacy `size` fallback for backup transfers.
 
 ### Known limitations
 - Uses private, undocumented dashboard endpoints that can change without notice.

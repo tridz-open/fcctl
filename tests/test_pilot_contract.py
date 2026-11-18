@@ -27,7 +27,6 @@ FCCTL_ONLY_ALLOWLIST = {
     ("DELETE", "/apps/{}"): "P8: remove_app route is not in the dashboard bundle and is unverified live; "
                             "open until probed (2026-11-18)",
     ("GET", "/sites/{}/backups/{}"): "verified live 2026-11-18; the dashboard only uses the list and download routes",
-    ("GET", "/monitor/status"): "verified live 2026-11-18; the dashboard only uses /monitor/history",
 }
 # Extra keys fcctl sends beyond the dashboard's, per route: {(method, path): {"body"|"query": {key: reason}}}.
 EXTRA_KEYS = {
@@ -262,7 +261,6 @@ CASES = {
     "monitor.metrics": [lambda p, d, t: monitor.metrics(p)],
     "monitor.system": [lambda p, d, t: monitor.system(p)],
     "monitor.health": [lambda p, d, t: monitor.health(p)],
-    "monitor.monitor_status": [lambda p, d, t: monitor.monitor_status(p)],
     "tasks.retry_conflict": [lambda p, d, t: _pure(tasks.retry_conflict(_noop))],
     "tasks.wait_task": [lambda p, d, t: tasks.wait_task(p, TS, poll=0)],
     "tasks.stream_events": [lambda p, d, t: tasks.stream_events(p, f"/tasks/{TS}/events")],
@@ -394,7 +392,7 @@ def test_fake_routes_are_in_contract_and_backup_detail_uses_size_bytes(fake_fc):
     stasks.wait_task(p, r["task_id"], poll=0)
     sapps.check_updates_result(p, r["task_id"])
     slogs.list_logs(p), slogs.content(p, "web.log", 2), slogs.content(p, "web.log")
-    smonitor.health(p), smonitor.metrics(p), smonitor.system(p), smonitor.monitor_status(p)
+    smonitor.health(p), smonitor.metrics(p), smonitor.system(p)
     staskops.output(p, r["task_id"])
     stasks.run(p, lambda: getattr(ssites.drop_site, "_unsafe", ssites.drop_site)(p, name), **run)
 

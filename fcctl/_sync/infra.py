@@ -2,6 +2,7 @@
 """Async server creation catalog: images, offerings, eligible plans."""
 from __future__ import annotations
 
+from ..region import default_region
 from .central import CentralClient
 
 M = "central.api.images."
@@ -9,9 +10,9 @@ M = "central.api.images."
 OPS = {"images": "infra.images", "offerings": "infra.offerings", "plans_eligible": "infra.plans_eligible"}
 
 
-def images(c: CentralClient, region: str = "bom", offering: str = "pilot", flow: str | None = None,
+def images(c: CentralClient, region: str | None = None, offering: str = "pilot", flow: str | None = None,
            offset: int | None = None):
-    p = {"region": region, "offering": offering}
+    p = {"region": region or default_region(), "offering": offering}
     if flow:
         p["flow"] = flow
     if offset is not None:
@@ -23,9 +24,9 @@ def offerings(c: CentralClient, flow: str = "Server"):
     return c.call("GET", M + "list_offerings", params={"flow": flow})
 
 
-def plans_eligible(c: CentralClient, region: str = "bom", offering: str | None = None,
+def plans_eligible(c: CentralClient, region: str | None = None, offering: str | None = None,
                    image_id: str | None = None, snapshot: str | None = None):
-    p = {"region": region}
+    p = {"region": region or default_region()}
     for k, v in (("offering", offering), ("image_id", image_id), ("snapshot", snapshot)):
         if v:
             p[k] = v

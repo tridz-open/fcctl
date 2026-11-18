@@ -32,8 +32,8 @@ def classify(filename: str) -> str | None:
 
 
 def _size(f: dict) -> int:
-    """Live backup listings carry size_bytes; accept the legacy size key as a fallback."""
-    v = f.get("size_bytes", f.get("size"))
+    """Live backup listings carry size_bytes."""
+    v = f.get("size_bytes")
     if v is None:
         raise TransferError(f"backup file {f.get('filename')!r} has no size_bytes")
     return int(v)

@@ -1,7 +1,6 @@
 """Single-flight re-authentication.
 
-Order: (1) reload cookies from the Playwright profile (DEPRECATED browser support; optional) -> (2) refresh CSRF ->
-(3) re-mint Pilot bench link (pilot scope) -> (4) browser login -> (5) alert + raise ReauthFailed.
+Order: (1) refresh CSRF -> (2) re-mint Pilot bench link (pilot scope) -> (3) alert + raise ReauthFailed.
 """
 from __future__ import annotations
 
@@ -13,8 +12,8 @@ from .request import FcError, PilotClient, ReauthFailed
 
 
 class Reauther:
-    def __init__(self, store, central, browser=None, alerter=None, pilot: PilotClient | None = None):
-        self.store, self.central, self.browser, self.alerter, self.pilot = store, central, browser, alerter, pilot
+    def __init__(self, store, central, alerter=None, pilot: PilotClient | None = None):
+        self.store, self.central, self.alerter, self.pilot = store, central, alerter, pilot
         self._lock = threading.Lock()
         self._gen = 0
         self.trail: list[str] = []  # step names attempted, in order (tests + audit)
@@ -28,15 +27,6 @@ class Reauther:
             return False
 
     # steps -----------------------------------------------------------
-    def _cookies(self) -> bool:
-        if not self.browser:
-            return False
-        c = self.browser.cookies().get("sid")
-        if not c:
-            return False
-        self.store.set_central(sid=c)
-        return self._central_ok()
-
     def _csrf(self) -> bool:
         return bool(refresh_csrf(self.central)) and self._central_ok()
 
@@ -47,17 +37,6 @@ class Reauther:
         PilotClient(self.central, server, http=self.pilot.http if self.pilot else None).mint()
         return True
 
-    def _browser_login(self) -> bool:
-        if not self.browser:
-            return False
-        self.browser.ensure_logged_in(alerter=self.alerter)
-        c = self.browser.cookies().get("sid")
-        if c:
-            self.store.set_central(sid=c)
-        if self.browser.csrf:
-            self.store.set_central(csrf=self.browser.csrf)
-        return self._central_ok()
-
     # entry -------------------------------------------------------------
     def recover(self, scope: str = "central", error: Exception | None = None, server: str | None = None) -> str:
         gen = self._gen
@@ -67,12 +46,9 @@ class Reauther:
             central_ok = scope == "pilot" and self._central_ok()
             steps: list[tuple[str, Any]] = []
             if not central_ok:
-                steps += [("cookies", self._cookies), ("csrf", self._csrf)]
+                steps.append(("csrf", self._csrf))
             if scope == "pilot":
                 steps.append(("bench_link", lambda: self._bench_link(server)))
-            steps.append(("browser_login", self._browser_login))
-            if scope == "pilot":
-                steps.append(("bench_link_after_login", lambda: self._bench_link(server)))
             for name, fn in steps:
                 self.trail.append(name)
                 try:
@@ -84,6 +60,6 @@ class Reauther:
             self.trail.append("alert")
             if self.alerter:
                 self.alerter.send("Frappe Cloud re-auth FAILED",
-                                  f"scope={scope} error={error!r}\nHuman login required in the profile "
+                                  f"scope={scope} error={error!r}\nHuman login required (`fcctl auth login`) in the profile "
                                   f"{self.store.profile_dir}. Trail: {self.trail}")
             raise ReauthFailed(f"all re-auth steps failed ({scope})")

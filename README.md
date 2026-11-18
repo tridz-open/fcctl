@@ -24,7 +24,7 @@ Read this before using fcctl.
 
 - **Not affiliated with or endorsed by Frappe Technologies.** "Frappe" and "Frappe Cloud" are their trademarks.
 - **fcctl uses the private dashboard API.** fcctl calls the same HTTP endpoints the Frappe Cloud web dashboard calls, signed in with your own account. Frappe has not documented or published these endpoints as a public API. They can change or disappear without notice, and any fcctl command can break when they do. Pin a version, and test against a non-production team first.
-- **Some request bodies are unverified.** Many endpoints were mapped by reading the open-source code rather than by calling them live; `docs/API_IA.md` marks which are verified (V/R) and which are source-only (S/W). Treat every write you have not tried yourself as experimental.
+- **Some request bodies are unverified.** Many endpoints were mapped by reading the open-source code rather than by calling them live; `docs/API_IA.md` separates what is verified live, what is implemented but unverified, and what is not implemented. Treat every write you have not tried yourself as experimental.
 - **Your Frappe Cloud terms still apply.** You are responsible for using fcctl within them. Automated sign-in (the IMAP option below) and automation in general may be restricted. If you plan to run fcctl unattended or at volume, ask Frappe first. fcctl never solves CAPTCHAs or Cloudflare challenges: when one appears, it stops with exit code 10.
 - **The safety layer guards against mistakes, not attackers.** Anyone who holds your session can call the API directly and bypass every fcctl check. For the full model, see [Safety model](#safety-model).
 - **The interfaces may change.** The CLI, the library and the on-disk formats can change between 0.x releases.
@@ -65,8 +65,6 @@ Optional extras:
 | Extra | Adds | Needed for |
 |---|---|---|
 | `yaml` | pyyaml | `-o yaml` output |
-| `s3` | boto3 | copying backups to S3-compatible storage |
-| `browser` | playwright | DEPRECATED, will be removed: library-only Playwright fallback (see [Deprecated: browser fallback](#deprecated-browser-fallback-will-be-removed)) |
 
 Check the install with `fcctl --help`, `fcctl version` and `fcctl guide`.
 
@@ -145,10 +143,10 @@ fcctl doctor                           # key, config, profile and session
 # Fetch and install in one step, the same call the dashboard makes.
 fcctl app add india_compliance --site shop.example.com -s server-xxxx
 
-# Add to the bench only (no site); runs the bench validator.
+# [experimental] Add to the bench only (no site); runs the bench validator. Not live-tested.
 fcctl app add hrms -s server-xxxx
 
-# A private or forked app from GitHub, on a specific branch.
+# [experimental] A private or forked app from GitHub, on a specific branch. Not live-tested.
 fcctl app add --repo https://github.com/you/your_app --branch main -s server-xxxx
 ```
 
@@ -312,11 +310,23 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). Endpoin
 - The API has no in-place snapshot restore.
 - No MCP server yet.
 - Live-verified on Frappe Cloud (Pilot): site create, rename, drop (through the approval gate), app install / `app add --site`, config, logs, backup create/list/schedule, cross-site backup upload, task output, and the full provision workflow from a golden backup (hooks, release, health).
-- Not yet live-tested: bench-only `app add`, `app add --repo`, `app check-updates`, `app remove`, a full `backup restore`, and all server, snapshot, bucket and billing (Central) writes. Treat these as experimental.
+- Not yet live-tested: see [Experimental commands](#experimental-commands). Their `--help` text starts with `[experimental]`.
 
-## Deprecated: browser fallback (will be removed)
+## Experimental commands
 
-`fcctl.browser.Browser` (Playwright, `pip install -e '.[browser]'` from a clone) and the `fallback` hook on `CentralClient` are deprecated and will be removed. Constructing `Browser` or using the fallback emits a `DeprecationWarning`. Default behaviour is HTTP-only: the fallback runs only if a library user wires it in explicitly. fcctl never solves challenges; the supported login is the plain HTTP path (`send_code`/`verify_code`: manual code, `--code-stdin`, or IMAP).
+These are implemented and covered by offline tests (respx and the in-process fake), but have not been run against the live Frappe Cloud API. Request bodies and response shapes may be wrong. Try them on throwaway resources first. Each is tagged `[experimental]` in `--help`.
+
+| Command | Why experimental |
+|---|---|
+| `app add NAME -s SERVER` (bench-only, no `--site`) | not live-tested; the bench validator can reject it |
+| `app add --repo URL` | name resolution is contract-tested only |
+| `app check-updates` | not live-tested |
+| `app remove` | not live-tested |
+| `backup restore` (full restore) | not live-tested; the approval gate stopped the live attempt |
+| `server create / start / stop / restart / resize / protect / terminate` | Central writes, not live-tested |
+| `snapshot take / delete` | Central writes, not live-tested |
+| `bucket create / quota / delete / put` | Central writes, not live-tested |
+| `billing health` | computed from field names that are not live-verified (billing has no write commands) |
 
 ## License
 

@@ -7,6 +7,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from ...errors import FcError, UsageError
+from ...region import default_region
 
 
 class ResumeRefused(FcError):
@@ -78,7 +79,7 @@ class ServerSpec:
     plan: str
     image: str
     title: str | None = None
-    region: str = "bom"
+    region: str = field(default_factory=default_region)
     vcpu: float | None = None      # used by the min-plan-size gate
     price: float | None = None     # compared with trust-tier spend headroom
 

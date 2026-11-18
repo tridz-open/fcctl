@@ -159,17 +159,6 @@ def test_wrapper_workflow_owned_restores(clients):
     assert rs.called
 
 
-@respx.mock
-def test_transfer_accepts_legacy_size_key(clients, monkeypatch):
-    src, dst = clients
-    legacy = {"files": [{"filename": k, "size": len(v)} for k, v in FILES.items()]}
-    monkeypatch.setitem(globals(), "META", legacy)
-    mock_src(respx)
-    up, puts, rs = mock_dst(respx)
-    assert restore_from_site_backup(src, "s", TS, dst, "d", chunk_size=10) == {"task": "t1"}
-    assert json.loads(up.calls[0].request.content)["files"]["database"]["size"] == 25
-
-
 def test_classify_by_kind():
     from fcctl._async.transfer import _part
     assert _part({"filename": "weird.bin", "kind": "private-file"}) == "private"

@@ -3,6 +3,7 @@ from __future__ import annotations
 import uuid
 
 from ..guard import guarded
+from ..region import default_region
 from . import _io
 from .central import CentralClient
 
@@ -21,27 +22,19 @@ async def overview(c: CentralClient, resource_id: str):
     return await c.call("GET", M + "server_overview", params={"resource_id": resource_id})
 
 
-async def action_status(c: CentralClient, name: str):
-    return await c.call("GET", M + "action_status", params={"name": name}, team=False)
-
-
-async def create_server(c: CentralClient, title: str, plan: str, image_id: str, region: str = "bom",
+async def create_server(c: CentralClient, title: str, plan: str, image_id: str, region: str | None = None,
                   hostname: str | None = None, snapshot: str | None = None, ssh_key_ids=None,
                   has_public_ipv4: bool = False, has_public_ipv6: bool = True,
                   is_firewall_enabled: bool = True, request_key: str | None = None):
     """Create a server; with `snapshot` it clones from a snapshot (same region only).
     request_key makes the create idempotent: persist it and reuse on retry/fallback."""
-    body = {"region": region, "title": title, "hostname": hostname or title, "offering": "pilot",
+    body = {"region": region or default_region(), "title": title, "hostname": hostname or title, "offering": "pilot",
             "image_id": image_id, "ssh_key_ids": ssh_key_ids or [], "has_public_ipv4": has_public_ipv4,
             "has_public_ipv6": has_public_ipv6, "is_firewall_enabled": is_firewall_enabled, "plan": plan,
             "request_key": request_key or str(uuid.uuid4())}
     if snapshot:
         body["snapshot"] = snapshot
     return await c.call("POST", M + "create_server", json=body)
-
-
-async def clone_from_snapshot(c: CentralClient, snapshot: str, **kw):
-    return await create_server(c, snapshot=snapshot, **kw)
 
 
 def _act(name):

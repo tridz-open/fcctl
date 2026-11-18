@@ -8,6 +8,7 @@ import uuid
 from .._sync import _io
 
 from .. import policy as pol
+from ..region import default_region
 
 DEFAULT_TIMEOUT = 1800.0  # global default for server/snapshot waits (override: --timeout)
 
@@ -170,34 +171,34 @@ def register(sub, common):
 
     add("list", list_, "list servers", id_=False)
     add("get", get, "server overview")
-    c = add("create", create, "create a server", id_=False)
+    c = add("create", create, "[experimental] create a server", id_=False)
     c.add_argument("--title", required=True)
     c.add_argument("--plan", required=True)
     c.add_argument("--image", required=True, help="image id")
-    c.add_argument("--region", default="bom")
+    c.add_argument("--region", default=default_region(), help="default: $FCCTL_REGION or bom")
     c.add_argument("--hostname")
     c.add_argument("--snapshot", help="clone from snapshot (same region)")
     c.add_argument("--request-key", help="idempotency key (reuse on retry)")
     pollable(c)
-    for n, f, h in (("start", start, "start"), ("stop", stop, "stop (guarded)"), ("restart", restart, "restart")):
+    for n, f, h in (("start", start, "[experimental] start"), ("stop", stop, "[experimental] stop (guarded)"), ("restart", restart, "[experimental] restart")):
         pollable(add(n, f, h))
-    r = add("resize", resize, "resize (cost-changing; needs --confirm under guarded)")
+    r = add("resize", resize, "[experimental] resize (cost-changing; needs --confirm under guarded)")
     r.add_argument("--plan", required=True)
     pollable(r)
-    p = add("protect", protect, "termination protection on|off (off is guarded)")
+    p = add("protect", protect, "[experimental] termination protection on|off (off is guarded)")
     p.add_argument("state", choices=["on", "off"])
-    t = add("terminate", terminate, "terminate (guarded)")
+    t = add("terminate", terminate, "[experimental] terminate (guarded)")
     t.add_argument("--take-snapshot", action="store_true")
     w = add("wait", wait, "wait until a server reaches a status")
     w.add_argument("--status", default="Running")
     pollable(w)
     pl = add("plans", plans, "eligible plans", id_=False)
-    pl.add_argument("--region", default="bom")
+    pl.add_argument("--region", default=default_region(), help="default: $FCCTL_REGION or bom")
     pl.add_argument("--offering")
     pl.add_argument("--image")
     pl.add_argument("--snapshot")
     im = add("images", images, "server images", id_=False)
-    im.add_argument("--region", default="bom")
+    im.add_argument("--region", default=default_region(), help="default: $FCCTL_REGION or bom")
     im.add_argument("--offering", default="pilot")
     m = add("metrics", metrics, "server metrics")
     m.add_argument("--period", default="1h")
