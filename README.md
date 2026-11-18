@@ -365,6 +365,8 @@ Pass secrets through the environment or a secret manager. Don't put them in comm
 
 The approvals, the journal and the audit log are not encrypted. fcctl creates the directory private; keep it that way.
 
+The journal is replayed on resume and reconcile, so it stores recipe values (for example an SMTP password) as-is, in files written with mode 0600. Secrets are masked only when a journal entry is displayed. The audit log is redacted at write time. Redaction covers errors, `--debug` output, dry-run requests, the audit log and displayed journal entries; normal command data output (what a command prints as its result) is deliberately not redacted.
+
 ## Library
 
 The stable surface is `fcctl.Client` (sync) and `fcctl.AsyncClient` (async, same methods):

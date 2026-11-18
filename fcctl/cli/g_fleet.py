@@ -8,6 +8,8 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
+from ..journal import render_entry
+
 OPS = {"backup.create": ("backup.create", "backups", "create"),
        "site.migrate": ("site.migrate", "sites", "migrate"),
        "site.clear_cache": ("site.clear_cache", "sites", "clear_cache")}
@@ -120,7 +122,7 @@ def _summary(e: dict) -> dict:
     return {"run": e["id"], "op": fl.get("op"), "state": e["state"], "total": len(its),
             "done": sum(i["state"] == "done" for i in its),
             "failed": sum(i["state"] == "failed" for i in its),
-            "pending": sum(i["state"] in ("pending", "submitted") for i in its), "items": its}
+            "pending": sum(i["state"] in ("pending", "submitted") for i in its), "items": render_entry(its)}
 
 
 def f_run(ctx, args):

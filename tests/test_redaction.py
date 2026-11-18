@@ -10,7 +10,7 @@ from hypothesis import given, settings, strategies as st
 
 from fcctl import errors as E
 from fcctl.audit import AuditLog
-from fcctl.journal import Journal
+from fcctl.journal import Journal, render_entry
 from fcctl.redact import RedactingFormatter, install_debug_logging, redact, redact_text
 from fcctl.request import DryRunRecorder
 
@@ -95,13 +95,14 @@ def test_journal(tmp_path):
     e = j.create("op", {"password": CANARY, "cmd": f"x --token={CANARY}"})
     j.transition(e["id"], "dispatching")
     j.transition(e["id"], "failed", error=f"boom {CANARY} Cookie: sid={CANARY}", result={"secret": CANARY})
-    for f in (tmp_path / "j").iterdir():
-        assert CANARY not in f.read_text()
+    # stored state is un-redacted (it is replayed); only rendering masks it
+    assert j.get(e["id"])["args"]["password"] == CANARY
+    assert CANARY not in json.dumps(render_entry(j.get(e["id"])))
     try:
         j.execute("op2", lambda _e: (_ for _ in ()).throw(RuntimeError(f"bad {CANARY}")))
     except RuntimeError:
         pass
-    assert all(CANARY not in f.read_text() for f in (tmp_path / "j").iterdir())
+    assert all(CANARY not in json.dumps(render_entry(x)) for x in j.list())
 
 
 def test_dry_run_recording():
@@ -130,3 +131,20 @@ def test_property_idempotent_and_no_leak(pre, post, key, sep):
     d = {"a": [x, {key: CANARY}], key: CANARY}
     r1 = redact(d)
     assert redact(r1) == r1 and CANARY not in json.dumps(r1)
+
+
+@pytest.mark.parametrize("k", ["secret", "token", "access_token", "csrf_token", "password", "smtp_password", "passwd",
+                               "api_key", "apikey", "encryption_key", "private_key", "key", "secret_key", "sid",
+                               "otp", "totp", "authorization", "cookie", "db_password", "Authorization",
+                               "webhook_secret", "mail_password"])
+def test_secret_key_regex_positives(k):
+    from fcctl.redact import SECRET_KEY_RE
+    assert SECRET_KEY_RE.search(k), k
+    assert redact({k: "v"}) == {k: "[REDACTED]"}
+
+
+@pytest.mark.parametrize("k", ["token_count", "tokens_used", "site", "keyboard", "monkey", "idem_key_hint", "mail_server",
+                               "max_users", "session_count", "residual", "developer_mode", "host_name"])
+def test_secret_key_regex_negatives(k):
+    from fcctl.redact import SECRET_KEY_RE
+    assert not SECRET_KEY_RE.search(k), k

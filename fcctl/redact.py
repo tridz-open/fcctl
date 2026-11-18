@@ -1,4 +1,6 @@
-"""Single redaction helper for every sink (errors, --debug output, audit, journal, dry-run, logs).
+"""Single redaction helper for diagnostic sinks (errors, --debug output, audit, dry-run, logs, rendered journal).
+
+Normal data output (`ctx.render`) is deliberately NOT redacted; the journal file is stored un-redacted.
 
 `redact(x)` masks secrets in text and, structurally, in dicts/lists/tuples. It is idempotent.
 """
@@ -15,10 +17,13 @@ ENV_SECRETS = ("FCCTL_KEY", "FCCTL_APPROVER_KEY", "FCCTL_APPROVAL_SECRET")
 
 # dict keys whose whole value is masked
 SECRET_KEY_RE = re.compile(
-    r"secret|token|password|passwd|api_?key|authorization|cookie|csrf|totp|otp$|^otp|(?:^|[_.-])sid$|^sid",
+    r"^key$"                                                   # a bare `key`
+    r"|^(?:secret|password|passwd|api_?key|authorization|cookie|csrf|totp|otp|sid)"      # leading word
+    r"|(?:^|[_.-])(?:secret|token|password|passwd|api_?key|private_key|encryption_key|"
+    r"authorization|cookie|csrf|totp|otp|sid)s?$",              # trailing word (token_count does not match)
     re.I)
 
-_KW = r"(?:[\w.-]*(?:token|password|passwd|secret|api_?key|totp)[\w.-]*|otp|sid)"
+_KW = r"(?:[\w.-]*(?:token|password|passwd|secret|api_?key|totp|encryption_key|private_key)[\w.-]*|otp|sid)"
 _HDR = r"(?:proxy-authorization|authorization|set-cookie|cookie|x-frappe-csrf-token)"
 
 _PATTERNS = [

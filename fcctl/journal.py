@@ -56,6 +56,11 @@ def idempotency(op: str) -> str:
     return IDEMPOTENCY.get(op, NON_IDEMPOTENT)
 
 
+def render_entry(e):
+    """Redacted copy of a journal entry (or list of them) for display. Stored state is never redacted."""
+    return redact(e)
+
+
 class JournalError(Exception): ...
 class InvalidTransition(JournalError): ...
 
@@ -70,7 +75,6 @@ class Journal:
         return self.dir / f"{jid}.json"
 
     def _write(self, e: dict):
-        e = redact(e)
         p = self._path(e["id"])
         tmp = p.with_suffix(".tmp")
         with open_private(tmp, "w") as f:
