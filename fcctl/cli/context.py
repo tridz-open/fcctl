@@ -131,10 +131,14 @@ class Ctx:
     def guard(self):
         def mk():
             from ..alerts import Alerter
-            from ..guard import Guard
+            from ..guard import Guard, load_private_key
             from ..keys import get_key
+            p = self.profile_or_none
+            pins = {x.name: dict(x.approver_pubkeys) for x in self.profiles.list() if x.approver_pubkeys}
             return Guard(home=self.home, key=get_key(self.env, self.home), secret=self.env.get("FCCTL_APPROVAL_SECRET", ""),
-                         alerter=Alerter(self.env), user=self.actor)
+                         alerter=Alerter(self.env), user=self.actor, approver_pubkeys=pins,
+                         approver_private_key=load_private_key(self.env),
+                         profile=p.name if p else "", team=p.team if p else "")
         return self._memo("guard", mk)
 
     def op_context(self, plane: str = "central", **kw):

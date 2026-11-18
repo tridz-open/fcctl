@@ -13,7 +13,7 @@ from .policy import EffectivePolicy, resolve_policy
 from .profiles import Profile, parse_profiles
 from .request import AuthError, FcError, ReauthFailed
 
-_FIELDS = ("email", "team", "policy", "allow", "owner", "owner_id", "session_store", "session_ref")
+_FIELDS = ("email", "team", "policy", "allow", "owner", "owner_id", "session_store", "session_ref", "approver_pubkeys")
 
 
 class ConfigError(FcError):
@@ -129,6 +129,8 @@ class ProfileStore:
         for k in ("owner", "owner_id", "session_store", "session_ref"):
             if getattr(profile, k):
                 row[k] = getattr(profile, k)
+        if profile.approver_pubkeys:
+            row["approver_pubkeys"] = dict(profile.approver_pubkeys)
         d.setdefault("profiles", {})[profile.name] = row
         save_config(d, self.path)
         return profile
