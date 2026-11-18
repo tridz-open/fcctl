@@ -77,9 +77,38 @@ def doctor(ctx, args):
     return checks
 
 
+def _read_body(data):
+    """Resolve --data: '@file', '-' (stdin) or inline JSON. Never echoes the body in errors."""
+    from ..errors import UsageError
+    if not data:
+        return None
+    if data == "-":
+        raw, src = sys.stdin.read(), "stdin"
+    elif data.startswith("@"):
+        path = data[1:]
+        src = f"file {path!r}"
+        try:
+            with open(path, encoding="utf-8") as f:
+                raw = f.read()
+        except (OSError, UnicodeDecodeError) as e:
+            why = e.strerror if isinstance(e, OSError) and e.strerror else type(e).__name__
+            raise UsageError("cannot read --data file", what=f"could not read {src}", why=why,
+                             fix="check the path exists and is readable UTF-8, or use --data - to read stdin")
+    else:
+        sys.stderr.write("warning: --data passed inline is visible in `ps` and shell history; "
+                         "use --data @file or --data -\n")
+        raw, src = data, "--data"
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise UsageError("invalid JSON body", what=f"{src} is not valid JSON",
+                         why=f"parse error at line {e.lineno} column {e.colno} ({e.msg})",
+                         fix="fix the JSON syntax and re-run")
+
+
 def api(ctx, args):
     from .. import rawapi
-    body = json.loads(args.data) if args.data else None
+    body = _read_body(args.data)
     path = args.path
     oc = ctx.op_context(args.plane)
     return rawapi.call_raw(oc, args.plane, args.method, path, body=body, confirm=args.confirm,
@@ -126,7 +155,7 @@ def register(sub, common):
     x = sub.add_parser("api", parents=[common], help="raw API call (classified, audited, guarded)")
     x.add_argument("plane", choices=["central", "pilot"]); x.add_argument("method")
     x.add_argument("path", help="central: dotted method; pilot: URL path")
-    x.add_argument("--data", help="JSON body"); x.add_argument("--guarded", action="store_true")
+    x.add_argument("--data", help="JSON body: @file reads it from a file, - reads stdin (keeps it out of ps/history); inline JSON works but warns"); x.add_argument("--guarded", action="store_true")
     x.set_defaults(func=api)
     sub.add_parser("guide", parents=[common], help="print the built-in usage guide").set_defaults(func=guide)
     x = sub.add_parser("completion", parents=[common], help="print a bash or zsh completion script"); x.add_argument("shell", choices=["bash", "zsh"])
