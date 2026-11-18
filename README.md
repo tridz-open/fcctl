@@ -1,5 +1,6 @@
 # fcctl
 
+> [!WARNING]
 > **ALPHA SOFTWARE. Bleeding edge. Read before you use it.**
 >
 > - fcctl is early-stage (0.1.0 alpha). It works against real Frappe Cloud accounts, but it is young.
