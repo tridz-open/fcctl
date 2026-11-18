@@ -10,7 +10,7 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 - `fcctl init` creates the session key on first run (OS keyring via the optional `fcctl[keyring]` extra, else a 0600 file); `FCCTL_KEY` still wins. `doctor` suggests an exact fix per failed check and `doctor --fix` applies the safe ones. Read-only `--dry-run` works without a key.
 - `api --data @file` and `--data -` (stdin); inline bodies print a warning.
 - Retry with exponential backoff and jitter on 429, 5xx and network errors for idempotent requests (GET/HEAD/OPTIONS and writes with an idempotency key), honouring `Retry-After`; `--max-retries` and `FCCTL_MAX_RETRIES`.
-- Optional `FCCTL_APPROVER_KEY` signed approvals and `--require-signed`.
+- Optional Ed25519 signed approvals: `fcctl approval keygen` and `sign`, `FCCTL_APPROVER_PRIVATE_KEY[_FILE]`, per-profile `approver_pubkeys`, and `--require-signed`.
 - Library facade: `unsafe=True` (audited) opt-out on `Sites.drop` and `Backups.restore`; guard model documented.
 - Full bash, zsh and fish completion for subcommands and flags, generated from the parser.
 - Help line and `Examples:` on every subcommand; generated `docs/COMMANDS.md` with a CI drift check; exit-code table in the README.
