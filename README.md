@@ -77,7 +77,7 @@ uv tool install .
 Check the install:
 
 ```bash
-fcctl --version      # prints the installed version, e.g. fcctl 0.1.0a3
+fcctl --version      # prints the installed version, e.g. fcctl 0.1.0a4
 fcctl --help
 fcctl guide          # built-in usage guide
 ```
