@@ -14,6 +14,7 @@ classifiers = [
     "Intended Audience :: Developers",
     "Intended Audience :: System Administrators",
     "Programming Language :: Python :: 3",
+    "Typing :: Typed",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -41,6 +42,9 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.dynamic]
 version = { attr = "fcctl._version.__version__" }
 
+[tool.setuptools.package-data]
+fcctl = ["py.typed"]
+
 [tool.setuptools.packages.find]
 include = ["fcctl*"]
 
@@ -66,3 +70,15 @@ python_version = "3.11"
 ignore_missing_imports = true
 warn_unused_ignores = false
 files = ["fcctl"]
+
+[[tool.mypy.overrides]]
+module = ["fcctl.errors", "fcctl.policy", "fcctl.guard", "fcctl.request", "fcctl.ops", "fcctl.retry", "fcctl.redact"]
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_any_generics = true
+no_implicit_optional = true
+warn_return_any = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_reexport = true
+warn_unused_ignores = true

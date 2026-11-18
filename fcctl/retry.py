@@ -10,7 +10,7 @@ import random
 from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
-from typing import Callable
+from typing import Callable, Mapping
 
 import httpx
 
@@ -45,7 +45,7 @@ class RetryPolicy:
         return attempt <= self.max_retries
 
 
-def from_env(env: dict | None = None) -> RetryPolicy:
+def from_env(env: Mapping[str, str] | None = None) -> RetryPolicy:
     raw = (env if env is not None else os.environ).get("FCCTL_MAX_RETRIES")
     p = RetryPolicy()
     if raw is None or str(raw).strip() == "":
@@ -98,4 +98,4 @@ def parse_retry_after(value: str | None, now: datetime | None = None) -> float |
 def annotate(err: Exception, attempts: int) -> None:
     """Add the attempt count to a typed error's why text when retries happened."""
     if attempts > 1 and hasattr(err, "why"):
-        err.why = f"{err.why} (gave up after {attempts} attempts)"  # type: ignore[attr-defined]
+        err.why = f"{err.why} (gave up after {attempts} attempts)"

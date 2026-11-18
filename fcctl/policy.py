@@ -3,16 +3,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from .profiles import Profile
 
 RESTRICTIVENESS = {"full": 0, "guarded": 1, "read_only": 2, "protected": 3}
 
 # op_id -> kind (read|write|cost|disruptive|destructive); cost = write that changes spend (needs --confirm when guarded), plane (central|pilot), method
-def _o(kind, plane, method):
+def _o(kind: str, plane: str, method: str) -> dict[str, Any]:
     return {"kind": kind, "plane": plane, "method": method}
 
-REGISTRY: dict[str, dict] = {
+REGISTRY: dict[str, dict[str, Any]] = {
     # servers (central)
     "server.list": _o("read", "central", "GET"), "server.overview": _o("read", "central", "GET"),
     "server.create": _o("write", "central", "POST"),
@@ -144,7 +145,7 @@ READ_METHODS = ("GET", "HEAD", "OPTIONS")
 SAFE_RAW_NON_GET: tuple[str, ...] = ()
 
 
-def classify_raw(method: str, path: str) -> dict | None:
+def classify_raw(method: str, path: str) -> dict[str, Any] | None:
     """Match a raw call to a registry entry that declares a `path` regex; else None (unclassified)."""
     method = method.upper()
     for op_id, meta in REGISTRY.items():
@@ -154,7 +155,7 @@ def classify_raw(method: str, path: str) -> dict | None:
     return None
 
 
-def check(op, eff: EffectivePolicy, registry: dict | None = None) -> Decision:
+def check(op: str | tuple[str, str], eff: EffectivePolicy, registry: dict[str, dict[str, Any]] | None = None) -> Decision:
     """op: registry op id (str) or raw (method, path)."""
     reg = REGISTRY if registry is None else registry
     raw = False

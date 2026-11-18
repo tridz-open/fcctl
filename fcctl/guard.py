@@ -40,7 +40,7 @@ import time
 import uuid
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import quote
 
 from ._fs import open_private, private_dir
@@ -97,7 +97,7 @@ class PendingApproval:
     expires_at: float
     reason: str = ""
     status: str = "pending"  # pending|executing|executed|failed|outcome_unknown|denied|expired
-    args: dict = field(default_factory=dict)
+    args: dict[str, Any] = field(default_factory=dict)
     kind: str = "central"  # central|pilot
     server: str | None = None
     created_at: float = 0.0
@@ -107,7 +107,7 @@ class PendingApproval:
     approved_at: float | None = None
 
 
-def _args_digest(args) -> str:
+def _args_digest(args: Any) -> str:
     return hashlib.sha256(json.dumps(args, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 
@@ -145,8 +145,10 @@ def totp(secret: str, at: float | None = None, step: int = 30) -> str:
 
 
 class Guard:
-    def __init__(self, home=None, key=None, secret=None, alerter=None, now=time.time, user=None,
-                 approver_key=None, verifier_key=None, require_signed=None):
+    def __init__(self, home: str | Path | None = None, key: str | None = None, secret: str | None = None,
+                 alerter: Any = None, now: Callable[[], float] = time.time, user: str | None = None,
+                 approver_key: str | None = None, verifier_key: str | None = None,
+                 require_signed: bool | None = None) -> None:
         self.home = Path(home or os.environ.get("FCCTL_HOME") or Path.home() / ".fcctl")
         private_dir(self.home)
         from .keys import get_key
@@ -165,7 +167,7 @@ class Guard:
         self.store_path, self.audit_path = self.home / "approvals.json", self.home / "audit.jsonl"
 
     # ---- signed store ----
-    def _sig(self, rec: dict) -> str:
+    def _sig(self, rec: dict[str, Any]) -> str:
         body = json.dumps(rec, sort_keys=True, separators=(",", ":"), default=str).encode()
         return hmac.new(self.key, body, hashlib.sha256).hexdigest()
 
@@ -184,7 +186,7 @@ class Guard:
             out[pid] = PendingApproval(**rec)
         return out
 
-    def _save(self, recs: dict[str, PendingApproval]):
+    def _save(self, recs: dict[str, PendingApproval]) -> None:
         data = {pid: {"rec": asdict(r), "sig": self._sig(asdict(r))} for pid, r in recs.items()}
         tmp = self.store_path.with_suffix(".tmp")
         with open_private(tmp, "w") as f:
@@ -192,7 +194,7 @@ class Guard:
         os.replace(tmp, self.store_path)
 
     # ---- audit (append-only, hash-chained JSONL) ----
-    def audit(self, event: str, rec: PendingApproval, actor: str, **extra):
+    def audit(self, event: str, rec: PendingApproval, actor: str, **extra: Any) -> None:
         prev = ""
         if self.audit_path.exists():
             lines = self.audit_path.read_text().splitlines()
@@ -204,10 +206,10 @@ class Guard:
             f.write(json.dumps(entry, sort_keys=True, default=str) + "\n")
 
     # ---- .executing markers (carry journal_id) ----
-    def _marker(self, pid):
+    def _marker(self, pid: str) -> Path:
         return self.home / f"{pid}.executing"
 
-    def markers(self) -> list[dict]:
+    def markers(self) -> list[dict[str, Any]]:
         out = []
         for p in sorted(self.home.glob("*.executing")):
             try:
@@ -216,10 +218,10 @@ class Guard:
                 pass
         return out
 
-    def remove_marker(self, pid):
+    def remove_marker(self, pid: str) -> None:
         self._marker(pid).unlink(missing_ok=True)
 
-    def finish_approval(self, pid, status, result=None):
+    def finish_approval(self, pid: str, status: str, result: Any = None) -> None:
         """Used by reconcile only: record the proven outcome. Never resets to pending."""
         recs = self._load()
         rec = recs[pid]
@@ -227,12 +229,13 @@ class Guard:
         self._save(recs)
         self.audit("reconciled_" + status, rec, "reconcile")
 
-    def _journal(self):
+    def _journal(self) -> Any:
         from .journal import Journal
         return Journal(self.home / "journal", now=self.now)
 
     # ---- API ----
-    def request(self, op, target, args, kind="central", server=None, reason="") -> PendingApproval:
+    def request(self, op: str, target: Any, args: dict[str, Any], kind: str = "central",
+                server: str | None = None, reason: str = "") -> PendingApproval:
         recs = self._load()
         t = self.now()
         rec = PendingApproval(id=uuid.uuid4().hex[:12], op=op, target=str(target), requested_by=self.user,
@@ -254,7 +257,7 @@ class Guard:
         t = self.now()
         return [r for r in self._load().values() if r.status == "pending" and r.expires_at > t]
 
-    def _check_token(self, token: str):
+    def _check_token(self, token: str) -> None:
         if not self.secret:
             raise BadToken("FCCTL_APPROVAL_SECRET is not configured")
         token = (token or "").strip()
@@ -268,7 +271,7 @@ class Guard:
         if not ok:
             raise BadToken("invalid approval token")
 
-    def _signature_step(self, rec: PendingApproval, approver: str):
+    def _signature_step(self, rec: PendingApproval, approver: str) -> None:
         """Sign (when an approver key is set) and verify the approval record. Mutates rec only on success."""
         if self.approver_key and self.approver_key in (self.key.decode(), self.secret):
             raise GuardError("FCCTL_APPROVER_KEY equals the requester secret",
@@ -289,7 +292,8 @@ class Guard:
             raise BadApprovalSignature(f"approval {rec.id} is unsigned and signed approval is required")
         rec.approver_sig, rec.approved_at = sig, ts
 
-    def approve(self, pid: str, approver: str, token: str, client_factory=None):
+    def approve(self, pid: str, approver: str, token: str,
+                client_factory: Callable[[str, str | None], Any] | None = None) -> Any:
         recs = self._load()
         rec = recs.get(pid)
         if rec is None:
@@ -347,7 +351,7 @@ class Guard:
         self.audit("executed", rec, approver)
         return rec.result
 
-    def deny(self, pid: str, approver: str):
+    def deny(self, pid: str, approver: str) -> PendingApproval:
         recs = self._load()
         rec = recs.get(pid)
         if rec is None or rec.status != "pending":
@@ -365,16 +369,16 @@ class _Op:
     kind: str
 
 
-def _central(name: str, mod: str = "servers"):
+def _central(name: str, mod: str = "servers") -> Callable[..., Any]:
     """Lazy callable resolving fcctl.<mod>.<name> at approval time (avoids import cycles)."""
-    def call(c, *a, **k):
+    def call(c: Any, *a: Any, **k: Any) -> Any:
         import importlib
         fn = getattr(importlib.import_module(f"fcctl.{mod}"), name)
         return getattr(fn, "_unsafe", fn)(c, *a, **k)
     return call
 
 
-def _pilot(name: str, mod: str):
+def _pilot(name: str, mod: str) -> Callable[..., Any]:
     """Lazy callable resolving the raw fcctl.<mod>.<name>._unsafe at approval time (Pilot ops)."""
     return _central(name, mod)
 
@@ -399,7 +403,7 @@ REGISTRY: dict[str, _Op] = {
 _default: Guard | None = None
 
 
-def load_all():
+def load_all() -> None:
     """Import every module holding guarded ops so REGISTRY is complete."""
     from . import apps, backups, objects, servers, sites, snapshots  # noqa: F401
 
@@ -412,7 +416,7 @@ def default_guard() -> Guard:
     return _default
 
 
-def set_default_guard(g: Guard | None):
+def set_default_guard(g: Guard | None) -> None:
     global _default
     _default = g
 
@@ -424,17 +428,17 @@ def _recording() -> bool:
     return DryRunRecorder.active()
 
 
-def guarded(op: str, target, kind: str = "central"):
+def guarded(op: str, target: Callable[..., Any], kind: str = "central") -> Callable[[Callable[..., Any]], Callable[..., Any]]:
     """Decorate `fn(client, *args)`. The wrapper files a PendingApproval; `wrapper._unsafe` is the
     raw implementation, used only by Guard.approve. `target(**bound_args)` names the victim."""
-    def deco(fn):
+    def deco(fn: Callable[..., Any]) -> Callable[..., Any]:
         sig = inspect.signature(fn)
 
         is_async = inspect.iscoroutinefunction(fn)
         if not is_async:  # the async twin never registers: approvals run the sync implementation
             REGISTRY[op] = _Op(fn, kind)
 
-        def _file(client, a, k):
+        def _file(client: Any, a: tuple[Any, ...], k: dict[str, Any]) -> PendingApproval:
             b = sig.bind(client, *a, **k)
             b.apply_defaults()
             args = {n: v for n, v in b.arguments.items() if n != next(iter(sig.parameters))}
@@ -444,17 +448,17 @@ def guarded(op: str, target, kind: str = "central"):
 
         if is_async:
             @functools.wraps(fn)
-            async def wrapper(client, *a, **k):
+            async def wrapper(client: Any, *a: Any, **k: Any) -> Any:
                 if _recording():
                     return await fn(client, *a, **k)
                 return _file(client, a, k)
         else:
             @functools.wraps(fn)
-            def wrapper(client, *a, **k):
+            def wrapper(client: Any, *a: Any, **k: Any) -> Any:
                 if _recording():
                     return fn(client, *a, **k)
                 return _file(client, a, k)
-        wrapper._unsafe = fn
-        wrapper.guard_op = op
+        setattr(wrapper, "_unsafe", fn)
+        setattr(wrapper, "guard_op", op)
         return wrapper
     return deco
