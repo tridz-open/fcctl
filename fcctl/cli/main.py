@@ -9,7 +9,7 @@ import traceback
 
 GLOBAL_DEFAULTS = {"profile": None, "server": None, "output": None, "wait": None, "timeout": None,
                    "dry_run": False, "debug": False, "no_color": False, "yes": False, "confirm": None,
-                   "no_progress": False}
+                   "no_progress": False, "max_retries": None}
 
 
 def _wait_arg(v):
@@ -36,6 +36,8 @@ def add_global_flags(p: argparse.ArgumentParser) -> None:
     p.add_argument("--yes", action="store_true", default=S, help="skip prompts (never bypasses guard/policy)")
     p.add_argument("--confirm", nargs="?", const=True, default=S, metavar="TARGET",
                    help="confirm a guarded write (echo the target)")
+    p.add_argument("--max-retries", type=int, default=S, metavar="N",
+                   help="retries on 429/5xx/network errors for idempotent requests (default 3, env FCCTL_MAX_RETRIES; 0 disables)")
     p.add_argument("--no-progress", action="store_true", default=S, help="no progress on stderr")
 
 
@@ -99,6 +101,9 @@ def main(argv: list[str] | None = None) -> int:
     if func is None:
         parser.print_help(sys.stderr)
         return 2
+    if args.max_retries is not None:
+        from .. import retry
+        retry.set_default(retry.from_env().with_max_retries(args.max_retries))
     from .context import Ctx
     ctx = Ctx(args, parser=parser)
     try:

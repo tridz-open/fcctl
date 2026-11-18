@@ -23,3 +23,4 @@ research/
 .ruff_cache/
 build/
 .release-denylist
+.coverage

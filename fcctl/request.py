@@ -11,6 +11,7 @@ from urllib.parse import parse_qs, urlparse
 
 import httpx
 
+from . import retry as _retry
 from .session_store import SessionStore
 
 CENTRAL_BASE = "https://dashboard.frappe.io"
@@ -134,7 +135,9 @@ class CentralClient:
     """
 
     def __init__(self, store: SessionStore, team: str | None = None, base: str = CENTRAL_BASE,
-                 http: httpx.Client | None = None, timeout: float = 60.0):
+                 http: httpx.Client | None = None, timeout: float = 60.0,
+                 retry: _retry.RetryPolicy | None = None, sleep=None):
+        self.retry, self.sleep = retry, sleep
         self.store, self.team, self.base = store, team or store.data.get("team"), base.rstrip("/")
         self.http = http or httpx.Client(timeout=timeout, headers={"User-Agent": UA})
         self.reauth: Any = None
@@ -166,9 +169,29 @@ class CentralClient:
                 self.store.set_central(sid=m.group(1))
 
     def _once(self, method, dotted, params, json, team):
-        r = self.http.send(self.build(method, dotted, params, json, team))
+        policy = self.retry or _retry.default_policy()
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                r = self.http.send(self.build(method, dotted, params, json, team))
+            except _retry.NETWORK_ERRORS:
+                if not (_retry.is_idempotent(method) and policy.can_retry(attempt)):
+                    raise
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt))
+                continue
+            if (_retry.retriable_status(r.status_code) and _retry.is_idempotent(method)
+                    and policy.can_retry(attempt) and not is_cloudflare_challenge(r)):
+                ra = _retry.parse_retry_after(r.headers.get("retry-after"))
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt, ra))
+                continue
+            break
         self._capture_cookie(r)
-        return raise_for_central(r)
+        try:
+            return raise_for_central(r)
+        except FcError as e:
+            _retry.annotate(e, attempt)
+            raise
 
     def call(self, method: str, dotted: str, params: dict | None = None, json: Any = None,
              team: bool = True, _retried: bool = False) -> Any:
@@ -188,7 +211,9 @@ class PilotClient:
     """Pilot admin API on a server gateway: {gateway}/api/v1/*, Bearer JWT from get_bench_link."""
 
     def __init__(self, central: CentralClient, server: str, http: httpx.Client | None = None,
-                 timeout: float = 120.0, max_age: float = 120.0, clock: Callable[[], float] = _io.now):
+                 timeout: float = 120.0, max_age: float = 120.0, clock: Callable[[], float] = _io.now,
+                 retry: _retry.RetryPolicy | None = None, sleep=None):
+        self.retry, self.sleep = retry, sleep
         self.max_age, self.clock = max_age, clock
         self.central, self.server = central, server
         self.store = central.store
@@ -249,8 +274,25 @@ class PilotClient:
         headers = {"Accept": "application/json", "Authorization": f"Bearer {s['token']}"}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        r = self.http.request(method.upper(), f"{s['gateway']}/api/v1{path}", params=params, json=json,
-                              headers=headers)
+        url = f"{s['gateway']}/api/v1{path}"
+        idem = _retry.is_idempotent(method, idempotency_key)
+        policy = self.retry or _retry.default_policy()
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                r = self.http.request(method.upper(), url, params=params, json=json, headers=headers)
+            except _retry.NETWORK_ERRORS:
+                if not (idem and policy.can_retry(attempt)):
+                    raise
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt))
+                continue
+            if (_retry.retriable_status(r.status_code) and idem
+                    and policy.can_retry(attempt) and not is_cloudflare_challenge(r)):
+                ra = _retry.parse_retry_after(r.headers.get("retry-after"))
+                (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt, ra))
+                continue
+            break
         try:
             return r if raw else raise_for_pilot(r)
         except AuthError:
@@ -258,6 +300,9 @@ class PilotClient:
                 raise
             self.invalidate()
             return self.request(method, path, params, json, idempotency_key, raw, _retried=True)
+        except FcError as e:
+            _retry.annotate(e, attempt)
+            raise
 
     def get(self, path, **params): return self.request("GET", path, params=params or None)
     def post(self, path, json=None, key: str | None = None):

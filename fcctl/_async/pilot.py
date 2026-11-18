@@ -7,7 +7,8 @@ from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
 
-from ..request import AuthError, DryRunRecorder, raise_for_pilot
+from .. import retry as _retry
+from ..request import AuthError, DryRunRecorder, FcError, is_cloudflare_challenge, raise_for_pilot
 from . import _io
 from .central import CentralClient
 from .transport import UA, make_http
@@ -20,7 +21,9 @@ def seg(value: Any) -> str:
 
 class PilotClient:
     def __init__(self, central: CentralClient, server: str, http: httpx.AsyncClient | None = None,
-                 timeout: float = 120.0, max_age: float = 120.0, clock: Callable[[], float] = _io.now):
+                 timeout: float = 120.0, max_age: float = 120.0, clock: Callable[[], float] = _io.now,
+                 retry: _retry.RetryPolicy | None = None, sleep=None):
+        self.retry, self.sleep = retry, sleep
         self.max_age, self.clock = max_age, clock
         self.central, self.server = central, server
         self.store = central.store
@@ -77,8 +80,25 @@ class PilotClient:
         headers = {"Accept": "application/json", "Authorization": f"Bearer {s['token']}"}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
-        r = await self.http.request(method.upper(), f"{s['gateway']}/api/v1{path}", params=params,
-                                    json=json, headers=headers)
+        url = f"{s['gateway']}/api/v1{path}"
+        idem = _retry.is_idempotent(method, idempotency_key)
+        policy = self.retry or _retry.default_policy()
+        attempt = 0
+        while True:
+            attempt += 1
+            try:
+                r = await self.http.request(method.upper(), url, params=params, json=json, headers=headers)
+            except _retry.NETWORK_ERRORS:
+                if not (idem and policy.can_retry(attempt)):
+                    raise
+                await (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt))
+                continue
+            if (_retry.retriable_status(r.status_code) and idem
+                    and policy.can_retry(attempt) and not is_cloudflare_challenge(r)):
+                ra = _retry.parse_retry_after(r.headers.get("retry-after"))
+                await (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt, ra))
+                continue
+            break
         try:
             return r if raw else raise_for_pilot(r)
         except AuthError:
@@ -86,6 +106,9 @@ class PilotClient:
                 raise
             self.invalidate()
             return await self.request(method, path, params, json, idempotency_key, raw, _retried=True)
+        except FcError as e:
+            _retry.annotate(e, attempt)
+            raise
 
     async def get(self, path, **params): return await self.request("GET", path, params=params or None)
     async def post(self, path, json=None, key: str | None = None):
