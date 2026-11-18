@@ -110,13 +110,64 @@ def test_post_without_key_not_retried(store, mock):
     assert r2.call_count == 1 and sl == []
 
 
-def test_post_with_key_retried(store, mock):
+def test_post_with_key_5xx_not_retried(store, mock):
     sl = Sleeps()
     _, p = make(store, sl)
     route = mock.post(GW + "/api/v1/y").mock(side_effect=[httpx.Response(502), httpx.Response(200, json={"ok": 1})])
-    assert p.post("/y", {}, key="k1") == {"ok": 1}
-    assert route.call_count == 2
+    with pytest.raises(Exception):
+        p.post("/y", {}, key="k1")
+    assert route.call_count == 1 and sl == []
     assert route.calls[0].request.headers["Idempotency-Key"] == "k1"
+
+
+def test_post_read_timeout_not_retried(store, mock):
+    sl = Sleeps()
+    _, p = make(store, sl)
+    route = mock.post(GW + "/api/v1/y").mock(side_effect=httpx.ReadTimeout("t"))
+    with pytest.raises(httpx.ReadTimeout):
+        p.post("/y", {})
+    assert route.call_count == 1 and sl == []
+
+
+def test_post_connect_error_retried(store, mock):
+    sl = Sleeps()
+    _, p = make(store, sl)
+    route = mock.post(GW + "/api/v1/y").mock(side_effect=[httpx.ConnectError("c"), httpx.Response(200, json={"ok": 1})])
+    assert p.post("/y", {}) == {"ok": 1}
+    assert route.call_count == 2 and len(sl) == 1
+
+
+def test_post_429_retried(store, mock):
+    sl = Sleeps()
+    _, p = make(store, sl)
+    route = mock.post(GW + "/api/v1/y").mock(side_effect=[httpx.Response(429), httpx.Response(200, json={"ok": 1})])
+    assert p.post("/y", {}) == {"ok": 1}
+    assert route.call_count == 2
+
+
+def test_get_5xx_retried(store, mock):
+    sl = Sleeps()
+    _, p = make(store, sl)
+    route = mock.get(GW + "/api/v1/y").mock(side_effect=[httpx.Response(503), httpx.Response(200, json={"ok": 1})])
+    assert p.get("/y") == {"ok": 1}
+    assert route.call_count == 2
+
+
+def test_async_post_read_timeout_not_retried_connect_retried(store):
+    async def go():
+        async def asleep(_): pass
+
+        c = ACentral(store, team="T", retry=policy(), sleep=asleep)
+        p = APilot(c, "srv", retry=policy(), sleep=asleep)
+        with respx.mock(assert_all_called=False) as m:
+            m.get(LINK).mock(return_value=LINKRESP)
+            r = m.post(GW + "/api/v1/y").mock(side_effect=httpx.ReadTimeout("t"))
+            with pytest.raises(httpx.ReadTimeout):
+                await p.post("/y", {})
+            assert r.call_count == 1
+            r2 = m.post(GW + "/api/v1/z").mock(side_effect=[httpx.ConnectError("c"), httpx.Response(200, json={"ok": 1})])
+            assert await p.post("/z", {}) == {"ok": 1} and r2.call_count == 2
+    asyncio.run(go())
 
 
 def test_client_errors_not_retried(store, mock):

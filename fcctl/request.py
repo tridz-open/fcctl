@@ -279,25 +279,25 @@ class PilotClient:
         self._cache().pop(self.server, None)
 
     def request(self, method: str, path: str, params: dict[str, Any] | None = None, json: Any = None,
-                idempotency_key: str | None = None, raw: bool = False, _retried: bool = False) -> Any:
+                idempotency_key: str | None = None, raw: bool = False, _retried: bool = False,
+                _attempt: int = 0) -> Any:
         s = self.session()
         headers = {"Accept": "application/json", "Authorization": f"Bearer {s['token']}"}
         if idempotency_key:
             headers["Idempotency-Key"] = idempotency_key
         url = f"{s['gateway']}/api/v1{path}"
-        idem = _retry.is_idempotent(method, idempotency_key)
         policy = self.retry or _retry.default_policy()
-        attempt = 0
+        attempt = _attempt  # a re-auth retry continues the count, so it cannot reset the limit
         while True:
             attempt += 1
             try:
                 r = self.http.request(method.upper(), url, params=params, json=json, headers=headers)
-            except _retry.NETWORK_ERRORS:
-                if not (idem and policy.can_retry(attempt)):
+            except _retry.NETWORK_ERRORS as exc:
+                if not (_retry.retriable_error(method, exc) and policy.can_retry(attempt)):
                     raise
                 (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt))
                 continue
-            if (_retry.retriable_status(r.status_code) and idem
+            if (_retry.retriable_response(method, r.status_code)
                     and policy.can_retry(attempt) and not is_cloudflare_challenge(r)):
                 ra = _retry.parse_retry_after(r.headers.get("retry-after"))
                 (_io.sleep if self.sleep is None else self.sleep)(policy.delay(attempt, ra))
@@ -309,7 +309,8 @@ class PilotClient:
             if _retried:
                 raise
             self.invalidate()
-            return self.request(method, path, params, json, idempotency_key, raw, _retried=True)
+            return self.request(method, path, params, json, idempotency_key, raw, _retried=True,
+                                _attempt=attempt)
         except FcError as e:
             _retry.annotate(e, attempt)
             raise

@@ -15,6 +15,10 @@ from typing import Callable, Mapping
 import httpx
 
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
+# Retried on any network error / 5xx. PUT is idempotent by HTTP semantics.
+RETRY_ANY_METHODS = SAFE_METHODS | {"PUT"}
+# Errors where the request certainly never reached the server, so any method may be retried.
+NEVER_SENT_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout)
 NETWORK_ERRORS = (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.WriteTimeout,
                   httpx.PoolTimeout, httpx.ReadError, httpx.WriteError, httpx.RemoteProtocolError)
 
@@ -70,7 +74,25 @@ def set_default(policy: RetryPolicy | None) -> None:
 
 
 def is_idempotent(method: str, idempotency_key: str | None = None) -> bool:
-    return method.upper() in SAFE_METHODS or bool(idempotency_key)
+    """Safe to retry after the request may have reached the server (GET/HEAD/OPTIONS/PUT).
+
+    An Idempotency-Key does not qualify: nothing guarantees the server deduplicates it.
+    """
+    return method.upper() in RETRY_ANY_METHODS
+
+
+def retriable_error(method: str, exc: BaseException) -> bool:
+    """Network errors: any method on never-sent errors, only idempotent methods otherwise."""
+    if isinstance(exc, NEVER_SENT_ERRORS):
+        return True
+    return isinstance(exc, NETWORK_ERRORS) and is_idempotent(method)
+
+
+def retriable_response(method: str, code: int) -> bool:
+    """429 is retried for every method (the server rejected it); 5xx only for idempotent ones."""
+    if code == 429:
+        return True
+    return retriable_status(code) and is_idempotent(method)
 
 
 def retriable_status(code: int) -> bool:

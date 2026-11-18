@@ -248,7 +248,7 @@ Reads (GET/HEAD/OPTIONS) run directly. Under the `guarded` and `protected` polic
 
 **Dry run.** `--dry-run` on any write prints the decision and the HTTP requests it would send (method, path, body with secrets redacted), and sends nothing.
 
-**Retries.** Idempotent requests (GET, HEAD, OPTIONS, and writes that carry an idempotency key, which includes every Pilot POST) are retried on 429, 5xx and network errors with exponential backoff and jitter, honouring `Retry-After` (waits are capped at 30 seconds). The default is 3 retries; set `--max-retries N` or `FCCTL_MAX_RETRIES=N` (0 disables). Writes without an idempotency key (for example Central POSTs) are never retried automatically: an interrupted write is settled by `fcctl reconcile`.
+**Retries.** Reads and idempotent requests (GET, HEAD, OPTIONS, PUT) are retried on 429, 5xx and network errors with exponential backoff and jitter, honouring `Retry-After` (waits are capped at 30 seconds). Writes (POST, PATCH, DELETE) are retried only when they certainly did not reach the server: on connect errors (the request was never sent) and on 429. A write that times out, hits a read error or gets a 5xx is not retried, because it may have been applied; settle it with `fcctl reconcile`. An `Idempotency-Key` header is still sent on Pilot POSTs but is not relied on for deduplication. The default is 3 retries; set `--max-retries N` or `FCCTL_MAX_RETRIES=N` (0 disables). A re-auth retry counts toward the same attempt limit.
 
 **Shell completion** (bash, zsh, fish):
 
