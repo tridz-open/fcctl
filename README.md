@@ -14,7 +14,7 @@ fcctl is built by Tridz Technologies, a team that builds on Frappe Cloud. We wro
 
 - It calls the same dashboard endpoints the Frappe Cloud web UI calls, signed in with a normal user account (email code). Nothing else.
 - It is unofficial and not endorsed by Frappe Technologies.
-- It does not bypass Cloudflare or any bot protection. It sends an honest User-Agent (`fcctl/<version> (+https://github.com/tridz-dev/fcctl)`), and when a challenge appears it stops with exit code 10.
+- It does not bypass Cloudflare or any bot protection. It sends an honest User-Agent (`fcctl/<version> (+https://github.com/tridz-open/fcctl)`), and when a challenge appears it stops with exit code 10.
 - We will move to an official API or token flow the moment one exists, and we are happy to change, rate-limit or take this project down on request.
 - Contact: open an issue on this repository, or see [SECURITY.md](SECURITY.md) for security reports.
 
@@ -44,7 +44,7 @@ Please report bugs and API drift as issues. Do not open issues with Frappe about
 fcctl is not on PyPI yet. Install from a clone:
 
 ```bash
-git clone https://github.com/tridz-dev/fcctl.git
+git clone https://github.com/tridz-open/fcctl.git
 cd fcctl
 
 # Option A: uv (recommended)

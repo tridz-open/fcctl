@@ -28,9 +28,9 @@ yaml = ["pyyaml"]
 dev = ["pytest>=8", "respx", "pyyaml", "hypothesis", "unasync", "ruff"]
 
 [project.urls]
-Homepage = "https://github.com/tridz-dev/fcctl"
-Issues = "https://github.com/tridz-dev/fcctl/issues"
-Changelog = "https://github.com/tridz-dev/fcctl/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/tridz-open/fcctl"
+Issues = "https://github.com/tridz-open/fcctl/issues"
+Changelog = "https://github.com/tridz-open/fcctl/blob/main/CHANGELOG.md"
 
 [project.scripts]
 fcctl = "fcctl.cli:main"
