@@ -1,12 +1,13 @@
 # Security policy
 
-fcctl is alpha software.
+fcctl is early alpha software, provided "as is" without warranty of any kind (see [LICENSE](LICENSE)).
 
 ## Reporting a vulnerability
 
-Please report privately, not in a public issue: use GitHub's "Report a vulnerability" button (private security advisory) on this repository's Security tab.
+Please report security issues **privately**, not in public issues. Use GitHub's private vulnerability reporting: open the repository's **Security** tab and click **Report a vulnerability**
+(<https://github.com/tridz-open/fcctl/security/advisories/new>).
 
-Include the version (`fcctl version`), what you did, and what you expected. We aim to acknowledge within 7 days.
+Include the version or tag, what you did, what you expected and what happened. We aim to acknowledge within 7 days.
 
 ## Scope and threat model
 

@@ -9,6 +9,12 @@
 > - **Try writes on throwaway sites and a non-production team first.**
 > - **Not affiliated with or endorsed by Frappe Technologies.** "Frappe" and "Frappe Cloud" are their trademarks.
 
+## Use at your own risk, and contributions
+
+**Use at your own risk:** this is early alpha software, provided "as is" without warranty of any kind (see [LICENSE](LICENSE)). Don't use it for production data you can't afford to lose.
+
+**Contributions:** we are not accepting pull requests or outside contributions at this time. If you find a bug or a problem, please [open a GitHub issue](https://github.com/tridz-open/fcctl/issues).
+
 ## What is fcctl?
 
 fcctl is a command-line tool and Python library that drives [Frappe Cloud](https://frappecloud.com) from your terminal or your code. With it you can list servers and sites, install apps, take and restore backups, read logs, follow background tasks, edit site config, rename or drop sites, and provision whole new sites from a backup, all without clicking through the dashboard.
@@ -58,8 +64,6 @@ pipx install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.3"
 python3 -m venv .venv && . .venv/bin/activate
 pip install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.3"
 ```
-
-If the repository is private to you, make sure git can authenticate to GitHub (for example `gh auth login`).
 
 From a local clone (this is also how to develop on it):
 
