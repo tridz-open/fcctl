@@ -1,6 +1,8 @@
 """billing: tier/balance/invoices/usage/health (health exits 1 when not ok)."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 from .g_server import run_central
 
 
@@ -35,14 +37,16 @@ def health(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("billing", help="billing and trust tier", parents=[common])
-    gs = g.add_subparsers(dest="billing_cmd", required=True)
-    gs.add_parser("tier", aliases=["trust-tier"], parents=[common]).set_defaults(func=tier)
-    gs.add_parser("balance", parents=[common]).set_defaults(func=balance)
-    x = gs.add_parser("invoices", parents=[common])
+    gs = add_group(sub, common, "billing", "billing and trust tier",
+                   ["fcctl billing balance", "fcctl billing usage"], "billing_cmd")
+    add_cmd(gs, common, "tier", "show the trust tier (alias: trust-tier)", "fcctl billing tier",
+            aliases=["trust-tier"]).set_defaults(func=tier)
+    add_cmd(gs, common, "balance", "show the account balance", "fcctl billing balance").set_defaults(func=balance)
+    x = add_cmd(gs, common, "invoices", "list invoices, or show one", ["fcctl billing invoices", "fcctl billing invoices INVOICE_NAME"])
     x.add_argument("name", nargs="?", help="invoice name (omit to list)")
     x.set_defaults(func=invoices)
-    gs.add_parser("usage", parents=[common], help="forecast, cycle costs, next payment").set_defaults(func=usage)
-    x = gs.add_parser("health", parents=[common], help="[experimental] exit 1 when billing is not healthy (field names not live-verified)")
+    add_cmd(gs, common, "usage", "forecast, cycle costs, next payment", "fcctl billing usage").set_defaults(func=usage)
+    x = add_cmd(gs, common, "health", "[experimental] exit 1 when billing is not healthy (field names not live-verified)",
+                "fcctl billing health --min-balance 50")
     x.add_argument("--min-balance", type=float, default=0.0)
     x.set_defaults(func=health)

@@ -1,6 +1,8 @@
 """auth: login / logout / status / whoami / keepalive."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import sys
 
 WHOAMI_FN = "central.api.identity.my_profile"
@@ -75,17 +77,22 @@ def keepalive(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("auth", help="sign in and inspect the session", parents=[common])
-    gs = g.add_subparsers(dest="auth_cmd", required=True)
-    x = gs.add_parser("login", parents=[common], help="email-code login")
+    gs = add_group(sub, common, "auth", "sign in and inspect the session",
+                   ["fcctl auth login --email you@example.com", "fcctl auth whoami --caps"], "auth_cmd")
+    x = add_cmd(gs, common, "login", "email-code login",
+                ["fcctl auth login --email you@example.com", "fcctl auth login --email you@example.com --code-stdin"])
     x.add_argument("--email")
     x.add_argument("--code-stdin", action="store_true", help="read the code from stdin")
     x.add_argument("--code-source", choices=["manual", "imap"], default="manual")
     x.set_defaults(func=login)
-    gs.add_parser("logout", parents=[common], help="end the server session and clear the local one").set_defaults(func=logout)
-    gs.add_parser("status", parents=[common]).set_defaults(func=status)
-    w = gs.add_parser("whoami", parents=[common])
+    add_cmd(gs, common, "logout", "end the server session and clear the local one",
+            "fcctl auth logout").set_defaults(func=logout)
+    add_cmd(gs, common, "status", "show the local session state", "fcctl auth status").set_defaults(func=status)
+    w = add_cmd(gs, common, "whoami", "show the signed-in user (and capabilities with --caps)",
+                "fcctl auth whoami --caps")
     w.add_argument("--caps", action="store_true", help="include capabilities")
     w.set_defaults(func=whoami)
-    gs.add_parser("keepalive", parents=[common]).set_defaults(func=keepalive)
-    sub.add_parser("keepalive", parents=[common], help="one cheap Central GET to slide the session").set_defaults(func=keepalive)
+    add_cmd(gs, common, "keepalive", "one cheap Central GET to slide the session",
+            "fcctl auth keepalive").set_defaults(func=keepalive)
+    add_cmd(sub, common, "keepalive", "one cheap Central GET to slide the session",
+            "fcctl keepalive").set_defaults(func=keepalive)

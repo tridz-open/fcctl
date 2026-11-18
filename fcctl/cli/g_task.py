@@ -1,6 +1,8 @@
 """task: list / get / wait / attach / output / cancel. Also hosts shared helpers for pilot-task groups."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import time
 
 
@@ -75,9 +77,14 @@ def t_cancel(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("task", parents=[common], help="pilot tasks").add_subparsers(dest="task_cmd", required=True)
-    x = g.add_parser("list", parents=[common]); x.add_argument("--status"); x.set_defaults(func=t_list)
-    for name, fn, h in (("get", t_get, "show a task"), ("wait", t_wait, "wait for a task (exit 8 on timeout, 9 on failure)"),
-                        ("attach", t_wait, "re-attach to a running task (Ctrl-C detaches, exit 130)"),
-                        ("output", t_output, "task output"), ("cancel", t_cancel, "cancel a task (guarded)")):
-        x = g.add_parser(name, parents=[common], help=h); x.add_argument("task_id"); x.set_defaults(func=fn)
+    g = add_group(sub, common, "task", "pilot tasks", ["fcctl task list --status Running", "fcctl task wait TASK_ID"],
+                  "task_cmd")
+    x = add_cmd(g, common, "list", "list pilot tasks", ["fcctl task list", "fcctl task list --status Running"])
+    x.add_argument("--status"); x.set_defaults(func=t_list)
+    for name, fn, h, ex in (
+            ("get", t_get, "show a task", "fcctl task get TASK_ID"),
+            ("wait", t_wait, "wait for a task (exit 8 on timeout, 9 on failure)", "fcctl task wait TASK_ID --timeout 600"),
+            ("attach", t_wait, "re-attach to a running task (Ctrl-C detaches, exit 130)", "fcctl task attach TASK_ID"),
+            ("output", t_output, "task output", "fcctl task output TASK_ID"),
+            ("cancel", t_cancel, "cancel a task (guarded)", "fcctl --dry-run task cancel TASK_ID")):
+        x = add_cmd(g, common, name, h, ex); x.add_argument("task_id"); x.set_defaults(func=fn)

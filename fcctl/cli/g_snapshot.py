@@ -1,6 +1,8 @@
 """snapshot: list/take/delete/wait."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 from .g_server import poll, run_central
 
 
@@ -48,20 +50,25 @@ def wait(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("snapshot", help="server snapshots", parents=[common])
-    gs = g.add_subparsers(dest="snapshot_cmd", required=True)
-    x = gs.add_parser("list", parents=[common])
+    gs = add_group(sub, common, "snapshot", "server snapshots",
+                   ["fcctl snapshot list server-abc123", "fcctl snapshot wait server-abc123 SNAPSHOT_NAME"],
+                   "snapshot_cmd")
+    x = add_cmd(gs, common, "list", "list snapshots (optionally for one server)",
+                ["fcctl snapshot list", "fcctl snapshot list server-abc123"])
     x.add_argument("server_id", nargs="?")
     x.set_defaults(func=list_)
-    x = gs.add_parser("take", parents=[common], help="[experimental] take a snapshot (paid)")
+    x = add_cmd(gs, common, "take", "[experimental] take a snapshot (paid)",
+                "fcctl --dry-run snapshot take server-abc123 --title nightly")
     x.add_argument("server_id")
     x.add_argument("--title")
     x.add_argument("--poll", type=float, default=20.0)
     x.set_defaults(func=take)
-    x = gs.add_parser("delete", parents=[common], help="[experimental] delete snapshots (guarded)")
+    x = add_cmd(gs, common, "delete", "[experimental] delete snapshots (guarded)",
+                "fcctl --dry-run snapshot delete SNAPSHOT_NAME")
     x.add_argument("names", nargs="+")
     x.set_defaults(func=delete)
-    x = gs.add_parser("wait", parents=[common])
+    x = add_cmd(gs, common, "wait", "wait until a snapshot is available",
+                "fcctl snapshot wait server-abc123 SNAPSHOT_NAME --poll 30")
     x.add_argument("server_id")
     x.add_argument("name")
     x.add_argument("--poll", type=float, default=20.0)

@@ -1,6 +1,8 @@
 """logs: list / tail [--follow]."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import sys
 
 
@@ -36,8 +38,10 @@ def l_tail(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("logs", parents=[common], help="pilot logs").add_subparsers(dest="logs_cmd", required=True)
-    g.add_parser("list", parents=[common]).set_defaults(func=l_list)
-    x = g.add_parser("tail", parents=[common]); x.add_argument("filename")
+    g = add_group(sub, common, "logs", "pilot logs", ["fcctl logs list", "fcctl logs tail frappe.log --lines 100"], "logs_cmd")
+    add_cmd(g, common, "list", "list log files", "fcctl logs list").set_defaults(func=l_list)
+    x = add_cmd(g, common, "tail", "show the end of a log file (-f to follow)",
+                ["fcctl logs tail frappe.log --lines 100", "fcctl logs tail web.error.log -f"])
+    x.add_argument("filename")
     x.add_argument("-f", "--follow", action="store_true"); x.add_argument("--lines", type=int)
     x.set_defaults(func=l_tail)

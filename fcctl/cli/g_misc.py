@@ -1,6 +1,8 @@
 """reconcile, watch, alert test, doctor, api, guide, completion, version."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import json
 import os
 import sys
@@ -205,34 +207,39 @@ def version(ctx, args):
 
 
 def register(sub, common):
-    x = sub.add_parser("reconcile", parents=[common], help="settle ambiguous journal entries")
+    x = add_cmd(sub, common, "reconcile", "settle ambiguous journal entries", "fcctl reconcile")
     x.add_argument("--once", action="store_true"); x.set_defaults(func=reconcile)
-    x = sub.add_parser("watch", parents=[common], help="reconcile on an interval")
+    x = add_cmd(sub, common, "watch", "reconcile on an interval", "fcctl watch --interval 30 --count 10")
     x.add_argument("--interval", type=float, default=60.0)
     x.add_argument("--count", type=int, default=0, help=argparse_suppress())
     x.set_defaults(func=watch)
-    al = sub.add_parser("alert", parents=[common], help="alert channel tools").add_subparsers(dest="alert_cmd", required=True)
-    al.add_parser("test", parents=[common], help="send a test alert").set_defaults(func=alert_test)
-    x = sub.add_parser("init", parents=[common], help="first-run setup: create the encryption key and config dir")
+    al = add_group(sub, common, "alert", "alert channel tools", "fcctl alert test", "alert_cmd")
+    add_cmd(al, common, "test", "send a test alert", "fcctl alert test").set_defaults(func=alert_test)
+    x = add_cmd(sub, common, "init", "first-run setup: create the encryption key and config dir",
+                ["fcctl init", "fcctl init --store file"])
     x.add_argument("--store", choices=["keyring", "file"], help="where to keep the key (default: keyring if available, else file)")
     x.set_defaults(func=init)
-    x = sub.add_parser("doctor", parents=[common], help="check config, session and policy"); x.add_argument("--api", action="store_true")
+    x = add_cmd(sub, common, "doctor", "check config, session and policy", ["fcctl doctor", "fcctl doctor --api --fix"])
+    x.add_argument("--api", action="store_true")
     x.add_argument("--fix", action="store_true", help="apply safe fixes (create key, tighten permissions)")
     x.set_defaults(func=doctor)
-    x = sub.add_parser("api", parents=[common], help="raw API call (classified, audited, guarded)",
-                       description="Raw API call. GET/HEAD/OPTIONS run directly. Unclassified writes (POST/PUT/PATCH/DELETE) "
-                                   "under the guarded or protected policy are not executed: they file a pending approval "
-                                   "(exit 7). --yes/--confirm do not bypass this. A second person runs "
-                                   "`fcctl approval approve <id> --approver <name>` (token in FCCTL_APPROVAL_TOKEN) to execute "
-                                   "the identical request.")
+    x = add_cmd(sub, common, "api", "raw API call (classified, audited, guarded)",
+                ["fcctl api pilot GET /api/method/ping", "fcctl api central GET press.api.account.get",
+                 "fcctl --dry-run api central POST press.api.site.new --data @body.json"],
+                description="Raw API call. GET/HEAD/OPTIONS run directly. Unclassified writes (POST/PUT/PATCH/DELETE) "
+                            "under the guarded or protected policy are not executed: they file a pending approval "
+                            "(exit 7). --yes/--confirm do not bypass this. A second person runs "
+                            "`fcctl approval approve <id> --approver <name>` (token in FCCTL_APPROVAL_TOKEN) to execute "
+                            "the identical request.")
     x.add_argument("plane", choices=["central", "pilot"]); x.add_argument("method")
     x.add_argument("path", help="central: dotted method; pilot: URL path")
     x.add_argument("--data", help="JSON body: @file reads it from a file, - reads stdin (keeps it out of ps/history); inline JSON works but warns"); x.add_argument("--guarded", action="store_true")
     x.set_defaults(func=api)
-    sub.add_parser("guide", parents=[common], help="print the built-in usage guide").set_defaults(func=guide)
-    x = sub.add_parser("completion", parents=[common], help="print a bash or zsh completion script"); x.add_argument("shell", choices=["bash", "zsh"])
+    add_cmd(sub, common, "guide", "print the built-in usage guide", "fcctl guide").set_defaults(func=guide)
+    x = add_cmd(sub, common, "completion", "print a bash or zsh completion script", "fcctl completion zsh")
+    x.add_argument("shell", choices=["bash", "zsh"])
     x.set_defaults(func=completion)
-    sub.add_parser("version", parents=[common], help="print fcctl and Python versions").set_defaults(func=version)
+    add_cmd(sub, common, "version", "print fcctl and Python versions", "fcctl version").set_defaults(func=version)
 
 
 def argparse_suppress():

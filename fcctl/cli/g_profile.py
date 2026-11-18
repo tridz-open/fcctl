@@ -1,6 +1,8 @@
 """profile: list / show / create / use / set / delete."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import dataclasses
 
 
@@ -62,19 +64,23 @@ def delete(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("profile", help="manage profiles", parents=[common])
-    gs = g.add_subparsers(dest="profile_cmd", required=True)
-    gs.add_parser("list", parents=[common]).set_defaults(func=list_)
-    x = gs.add_parser("show", parents=[common]); x.add_argument("name", nargs="?"); x.set_defaults(func=show)
-    x = gs.add_parser("create", parents=[common])
+    gs = add_group(sub, common, "profile", "manage profiles",
+                   ["fcctl profile list", "fcctl profile use main"], "profile_cmd")
+    add_cmd(gs, common, "list", "list profiles", "fcctl profile list").set_defaults(func=list_)
+    x = add_cmd(gs, common, "show", "show a profile (default: the active one)", ["fcctl profile show", "fcctl profile show main"])
+    x.add_argument("name", nargs="?"); x.set_defaults(func=show)
+    x = add_cmd(gs, common, "create", "create a profile",
+                "fcctl profile create main --email you@example.com --team TEAM-xxxx --policy guarded")
     x.add_argument("name"); x.add_argument("--email", required=True); x.add_argument("--team", required=True)
     x.add_argument("--policy", default="guarded", choices=["full", "guarded", "read_only", "protected"])
     x.add_argument("--allow", action="append"); x.add_argument("--session-ref")
     x.set_defaults(func=create)
-    x = gs.add_parser("use", parents=[common]); x.add_argument("name"); x.set_defaults(func=use)
-    x = gs.add_parser("set", parents=[common])
+    x = add_cmd(gs, common, "use", "make a profile the active one", "fcctl profile use main")
+    x.add_argument("name"); x.set_defaults(func=use)
+    x = add_cmd(gs, common, "set", "change fields of a profile", "fcctl profile set main --policy read_only")
     x.add_argument("name"); x.add_argument("--email"); x.add_argument("--team")
     x.add_argument("--policy", choices=["full", "guarded", "read_only", "protected"])
     x.add_argument("--allow", action="append"); x.add_argument("--session-ref")
     x.set_defaults(func=set_)
-    x = gs.add_parser("delete", parents=[common]); x.add_argument("name"); x.set_defaults(func=delete)
+    x = add_cmd(gs, common, "delete", "delete a profile", "fcctl profile delete old-profile")
+    x.add_argument("name"); x.set_defaults(func=delete)

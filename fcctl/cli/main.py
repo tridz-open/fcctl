@@ -20,25 +20,32 @@ def _wait_arg(v):
     return False if n <= 0 else n
 
 
-def add_global_flags(p: argparse.ArgumentParser) -> None:
+def add_global_flags(p, *, show: bool = True) -> None:
+    """Register the global flags. With show=False (sub-command parsers) they parse but stay out of
+    usage/help, so only the root `fcctl --help` lists them. Defaults are SUPPRESS in both places."""
     S = argparse.SUPPRESS
-    p.add_argument("--profile", default=S, help="profile name (else FCCTL_PROFILE or `profile use`)")
-    p.add_argument("-s", "--server", default=S, help="Frappe Cloud server id (server-xxxx)")
-    p.add_argument("-o", "--output", default=S, choices=["table", "json", "yaml", "ndjson"],
-                   help="output format (non-TTY default: json)")
-    p.add_argument("--wait", dest="wait", nargs="?", const=True, default=S, type=_wait_arg, metavar="SECS",
-                   help="wait for tasks (default); `--wait 0` = no wait, `--wait N` = wait up to N seconds")
-    p.add_argument("--no-wait", dest="wait", action="store_false", default=S, help="return after submit")
-    p.add_argument("--timeout", type=float, default=S, help="wait timeout in seconds (default 1800 for server/snapshot, 3600 for tasks); exit 8 on timeout")
-    p.add_argument("--dry-run", action="store_true", default=S, help="show what a write would do")
-    p.add_argument("--debug", action="store_true", default=S, help="show tracebacks")
-    p.add_argument("--no-color", action="store_true", default=S)
-    p.add_argument("--yes", action="store_true", default=S, help="skip prompts (never bypasses guard/policy)")
-    p.add_argument("--confirm", nargs="?", const=True, default=S, metavar="TARGET",
-                   help="confirm a guarded write (echo the target)")
-    p.add_argument("--max-retries", type=int, default=S, metavar="N",
-                   help="retries on 429/5xx/network errors for idempotent requests (default 3, env FCCTL_MAX_RETRIES; 0 disables)")
-    p.add_argument("--no-progress", action="store_true", default=S, help="no progress on stderr")
+    tgt = p.add_argument_group("global options (accepted before or after the command)") if show else p
+
+    def h(text):
+        return text if show else S
+    tgt.add_argument("--profile", default=S, help=h("profile name (else FCCTL_PROFILE or `profile use`)"))
+    tgt.add_argument("-s", "--server", default=S, help=h("Frappe Cloud server id (server-xxxx)"))
+    tgt.add_argument("-o", "--output", default=S, choices=["table", "json", "yaml", "ndjson"],
+                     help=h("output format (non-TTY default: json)"))
+    tgt.add_argument("--wait", dest="wait", nargs="?", const=True, default=S, type=_wait_arg, metavar="SECS",
+                     help=h("wait for tasks (default); `--wait 0` = no wait, `--wait N` = wait up to N seconds"))
+    tgt.add_argument("--no-wait", dest="wait", action="store_false", default=S, help=h("return after submit"))
+    tgt.add_argument("--timeout", type=float, default=S,
+                     help=h("wait timeout in seconds (default 1800 for server/snapshot, 3600 for tasks); exit 8 on timeout"))
+    tgt.add_argument("--dry-run", action="store_true", default=S, help=h("show what a write would do"))
+    tgt.add_argument("--debug", action="store_true", default=S, help=h("show tracebacks"))
+    tgt.add_argument("--no-color", action="store_true", default=S, help=h("disable colored output"))
+    tgt.add_argument("--yes", action="store_true", default=S, help=h("skip prompts (never bypasses guard/policy)"))
+    tgt.add_argument("--confirm", nargs="?", const=True, default=S, metavar="TARGET",
+                     help=h("confirm a guarded write (echo the target)"))
+    tgt.add_argument("--max-retries", type=int, default=S, metavar="N",
+                     help=h("retries on 429/5xx/network errors for idempotent requests (default 3, env FCCTL_MAX_RETRIES; 0 disables)"))
+    tgt.add_argument("--no-progress", action="store_true", default=S, help=h("no progress on stderr"))
 
 
 def _version() -> str:
@@ -62,11 +69,15 @@ def discover(subparsers, common) -> list[str]:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    root = argparse.ArgumentParser("fcctl", description="Frappe Cloud control CLI")
+    root = argparse.ArgumentParser(
+        "fcctl", description="Frappe Cloud control CLI: sites, servers, backups, billing and guarded writes.",
+        epilog="Examples:\n  fcctl profile list\n  fcctl --dry-run site drop demo.example.com\n"
+               "  fcctl -o table site list\n\nRun `fcctl COMMAND --help` for a command's options and examples.",
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     add_global_flags(root)
     root.add_argument("--version", action="version", version=f"fcctl {_version()}")
     common = argparse.ArgumentParser(add_help=False)
-    add_global_flags(common)
+    add_global_flags(common, show=False)
     sub = root.add_subparsers(dest="cmd", metavar="COMMAND")
     discover(sub, common)
     root.set_defaults(_parser=root)

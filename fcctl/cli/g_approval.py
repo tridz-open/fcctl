@@ -6,6 +6,8 @@ HMAC-signed and verified at execution; this is real separation only if the reque
 """
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import dataclasses
 import getpass
 import sys
@@ -63,17 +65,20 @@ def enroll(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("approval", help="approval step for guarded ops (a speed bump unless FCCTL_APPROVER_KEY is set)",
-                      description="Approval step for guarded ops. Self-approval on one machine is a speed bump, not a "
-                                  "two-person control. Set FCCTL_APPROVER_KEY (a secret distinct from FCCTL_KEY and "
-                                  "FCCTL_APPROVAL_SECRET, held by the approver/verifier, e.g. CI) to sign approvals; "
-                                  "execution then verifies the signature. --require-signed rejects unsigned ones.",
-                      parents=[common])
-    gs = g.add_subparsers(dest="approval_cmd", required=True)
-    gs.add_parser("list", parents=[common]).set_defaults(func=list_)
-    x = gs.add_parser("show", parents=[common]); x.add_argument("id"); x.set_defaults(func=show)
-    for name, fn in (("approve", approve), ("execute", execute)):
-        x = gs.add_parser(name, parents=[common]); x.add_argument("id")
+    gs = add_group(sub, common, "approval", "approval step for guarded ops (a speed bump unless FCCTL_APPROVER_KEY is set)",
+                   ["fcctl approval list", "fcctl approval approve APPROVAL_ID --approver alice"], "approval_cmd",
+                   description="Approval step for guarded ops. Self-approval on one machine is a speed bump, not a "
+                               "two-person control. Set FCCTL_APPROVER_KEY (a secret distinct from FCCTL_KEY and "
+                               "FCCTL_APPROVAL_SECRET, held by the approver/verifier, e.g. CI) to sign approvals; "
+                               "execution then verifies the signature. --require-signed rejects unsigned ones.")
+    add_cmd(gs, common, "list", "list pending approvals", "fcctl approval list").set_defaults(func=list_)
+    x = add_cmd(gs, common, "show", "show one approval request", "fcctl approval show APPROVAL_ID")
+    x.add_argument("id"); x.set_defaults(func=show)
+    for name, fn, h, ex in (
+            ("approve", approve, "approve a pending request (executes it by default)",
+             "fcctl approval approve APPROVAL_ID --approver alice --require-signed"),
+            ("execute", execute, "execute an approved request", "fcctl approval execute APPROVAL_ID")):
+        x = add_cmd(gs, common, name, h, ex); x.add_argument("id")
         x.add_argument("--approver")
         x.add_argument("--require-signed", action="store_true",
                        help="reject approvals lacking a valid FCCTL_APPROVER_KEY signature "
@@ -81,6 +86,7 @@ def register(sub, common):
         if name == "approve":
             x.add_argument("--execute", action="store_true", help="(default) execute on approval")
         x.set_defaults(func=fn)
-    x = gs.add_parser("deny", parents=[common]); x.add_argument("id"); x.add_argument("--approver")
+    x = add_cmd(gs, common, "deny", "deny a pending request", "fcctl approval deny APPROVAL_ID --approver alice")
+    x.add_argument("id"); x.add_argument("--approver")
     x.set_defaults(func=deny)
-    gs.add_parser("enroll", parents=[common], help="generate an approval secret").set_defaults(func=enroll)
+    add_cmd(gs, common, "enroll", "generate an approval secret", "fcctl approval enroll").set_defaults(func=enroll)

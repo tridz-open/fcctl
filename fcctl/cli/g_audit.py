@@ -1,6 +1,8 @@
 """audit: list / verify / export / remote."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import sys
 
 REMOTE_FN = "central.api.activity.team_activity"  # verified against the live API (GET, team+limit)
@@ -28,14 +30,18 @@ def remote(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("audit", help="local hash-chained audit log", parents=[common])
-    gs = g.add_subparsers(dest="audit_cmd", required=True)
+    gs = add_group(sub, common, "audit", "local hash-chained audit log",
+                   ["fcctl audit list --limit 20", "fcctl audit verify"], "audit_cmd")
 
     def filt(x):
         x.add_argument("--op"); x.add_argument("--audit-profile", metavar="PROFILE")
         x.add_argument("--outcome")
-    x = gs.add_parser("list", parents=[common]); filt(x); x.add_argument("--limit", type=int, default=50)
+    x = add_cmd(gs, common, "list", "list local audit entries",
+                ["fcctl audit list --limit 20", "fcctl audit list --op site.drop --outcome ok"])
+    filt(x); x.add_argument("--limit", type=int, default=50)
     x.set_defaults(func=list_)
-    gs.add_parser("verify", parents=[common]).set_defaults(func=verify)
-    x = gs.add_parser("export", parents=[common]); filt(x); x.set_defaults(func=export)
-    gs.add_parser("remote", parents=[common], help="team activity from Frappe Cloud").set_defaults(func=remote)
+    add_cmd(gs, common, "verify", "verify the audit hash chain", "fcctl audit verify").set_defaults(func=verify)
+    x = add_cmd(gs, common, "export", "export audit entries as JSON lines",
+                "fcctl audit export --audit-profile main")
+    filt(x); x.set_defaults(func=export)
+    add_cmd(gs, common, "remote", "team activity from Frappe Cloud", "fcctl audit remote").set_defaults(func=remote)

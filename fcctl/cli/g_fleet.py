@@ -1,6 +1,8 @@
 """fleet: run OP --select EXPR --parallel N / status RUN / resume RUN (journaled, bounded)."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 import threading
 import time
 import uuid
@@ -178,11 +180,16 @@ def f_resume(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("fleet", parents=[common], help="bounded multi-server runs").add_subparsers(
-        dest="fleet_cmd", required=True)
-    x = g.add_parser("run", parents=[common]); x.add_argument("op", help=" | ".join(OPS))
+    g = add_group(sub, common, "fleet", "bounded multi-server runs",
+                  ["fcctl --dry-run fleet run backup.create --select server-a,server-b:demo.example.com",
+                   "fcctl fleet status RUN_ID"], "fleet_cmd")
+    x = add_cmd(g, common, "run", "run one operation across several servers or sites with bounded parallelism",
+                ["fcctl --dry-run fleet run backup.create --select server-a,server-b:demo.example.com --parallel 2"])
+    x.add_argument("op", help=" | ".join(OPS))
     x.add_argument("--select", required=True, metavar="EXPR", help="server-a,server-b:site.example.com")
     x.add_argument("--parallel", type=int, default=4); x.set_defaults(func=f_run)
-    x = g.add_parser("status", parents=[common]); x.add_argument("run"); x.set_defaults(func=f_status)
-    x = g.add_parser("resume", parents=[common]); x.add_argument("run")
+    x = add_cmd(g, common, "status", "show the progress of a fleet run", "fcctl fleet status RUN_ID")
+    x.add_argument("run"); x.set_defaults(func=f_status)
+    x = add_cmd(g, common, "resume", "resume an interrupted fleet run", "fcctl fleet resume RUN_ID --parallel 2")
+    x.add_argument("run")
     x.add_argument("--parallel", type=int, default=0); x.set_defaults(func=f_resume)

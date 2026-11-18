@@ -1,6 +1,8 @@
 """backup: list / create / download / offsite / restore (guarded unless workflow-owned)."""
 from __future__ import annotations
 
+from .cmd import add_cmd, add_group
+
 
 def b_list(ctx, args):
     from .. import backups, ops
@@ -67,16 +69,23 @@ def b_restore(ctx, args):
 
 
 def register(sub, common):
-    g = sub.add_parser("backup", parents=[common], help="site backups").add_subparsers(dest="backup_cmd", required=True)
-    x = g.add_parser("list", parents=[common]); x.add_argument("site"); x.add_argument("--limit", type=int, default=20)
+    g = add_group(sub, common, "backup", "site backups",
+                  ["fcctl backup list demo.example.com", "fcctl backup create demo.example.com"], "backup_cmd")
+    x = add_cmd(g, common, "list", "list backups of a site", "fcctl backup list demo.example.com --limit 5")
+    x.add_argument("site"); x.add_argument("--limit", type=int, default=20)
     x.set_defaults(func=b_list)
-    x = g.add_parser("create", parents=[common]); x.add_argument("site"); x.set_defaults(func=b_create)
-    x = g.add_parser("download", parents=[common], help="download links, or a file with --file-id/--dest")
+    x = add_cmd(g, common, "create", "take a backup of a site now", "fcctl backup create demo.example.com")
+    x.add_argument("site"); x.set_defaults(func=b_create)
+    x = add_cmd(g, common, "download", "download links, or a file with --file-id/--dest",
+                ["fcctl backup download demo.example.com 20260101_000000",
+                 "fcctl backup download demo.example.com 20260101_000000 --file-id FILE_ID --dest ./backup.sql.gz"])
     x.add_argument("site"); x.add_argument("timestamp"); x.add_argument("--file-id"); x.add_argument("--dest")
     x.set_defaults(func=b_download)
-    x = g.add_parser("offsite", parents=[common], help="list offsite backups"); x.add_argument("site")
+    x = add_cmd(g, common, "offsite", "list offsite backups", "fcctl backup offsite demo.example.com")
+    x.add_argument("site")
     x.set_defaults(func=b_offsite)
-    x = g.add_parser("restore", parents=[common], help="[experimental] full restore of a backup over a site (guarded; not live-tested)")
+    x = add_cmd(g, common, "restore", "[experimental] full restore of a backup over a site (guarded; not live-tested)",
+                "fcctl --dry-run backup restore demo.example.com 20260101_000000")
     x.add_argument("site"); x.add_argument("timestamp"); x.add_argument("--parts", nargs="*")
     x.add_argument("--skip-failing-patches", action="store_true")
     x.add_argument("--workflow-id", help="exempt from approval only if this workflow created the site")
