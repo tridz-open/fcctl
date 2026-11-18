@@ -155,6 +155,35 @@ def classify_raw(method: str, path: str) -> dict[str, Any] | None:
     return None
 
 
+_S, _B, _N = "central.api.servers.", "central.billing.api.dashboard.", "central.notification.api."
+# Central dotted method -> registered read op id. REGISTRY is keyed by op id, so raw-GET classification
+# needs this reverse index (derived from each read op's Central call site).
+CENTRAL_READ_METHODS: dict[str, str] = {
+    _S + "registry": "server.list", _S + "server_overview": "server.overview",
+    _S + "server_hostnames": "server.hostnames", _S + "server_metrics": "monitor.central_metrics",
+    "central.api.activity.server_activity": "activity.server", "central.api.activity.team_activity": "activity.team",
+    "central.api.snapshots.list_snapshots": "snapshot.list",
+    "central.services.api.storage.get_object_storage": "bucket.get",
+    "central.services.api.storage.get_bucket_usage": "bucket.usage",
+    "central.services.api.storage.get_object_url": "objects.get_url",
+    "central.api.images.list_images": "infra.images", "central.api.images.list_offerings": "infra.offerings",
+    "central.api.images.eligible_plans": "infra.plans_eligible",
+    _B + "get_trust_tier": "billing.trust_tier", _B + "catalog.get_eligible_plans": "billing.eligible_plans",
+    _B + "get_credit_balance": "billing.wallet_balance", _B + "credit_ledger": "billing.ledger",
+    _B + "list_invoices": "billing.invoices_list", _B + "get_invoice": "billing.invoice_get",
+    _B + "list_subscriptions": "billing.subscriptions", _B + "get_team_overview": "billing.overview",
+    _N + "list_notifications": "notification.list",
+}
+
+
+def central_read_op(method: str) -> str | None:
+    """Op id for a Central dotted method that maps to a registered read op, else None."""
+    op = CENTRAL_READ_METHODS.get(method)
+    meta = REGISTRY.get(op) if op else None
+    return op if meta and meta["kind"] == "read" and meta["plane"] == "central" else None
+
+
+_RESOURCE_RE = re.compile(r"^/api/resource/[^/?#]+(/[^/?#]+)?/?(\?.*)?$")
 RISKY_GET_RE = re.compile(r"drop|delete|restore|archive", re.I)
 _METHOD_PREFIX = "/api/method/"
 
@@ -168,8 +197,10 @@ def raw_get_is_risky(plane: str | None, path: str) -> bool:
     """
     if plane == "central":
         name = path[len(_METHOD_PREFIX):] if path.startswith(_METHOD_PREFIX) else path
+        if _RESOURCE_RE.match(path):  # Frappe REST GET on a resource is read-only
+            return False
         meta = REGISTRY.get(name)
-        return not (meta and meta["kind"] == "read")
+        return not (central_read_op(name) or (meta and meta["kind"] == "read"))
     return bool(RISKY_GET_RE.search(path))
 
 

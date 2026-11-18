@@ -131,3 +131,28 @@ def test_guarded_flag_applies_to_get(tmp_path):
     with pytest.raises(ApprovalPending):
         call_raw(c, "pilot", "GET", "/sites", guarded=True)
     assert not f.calls
+
+
+# N1: Central raw reads were all blocked because REGISTRY is keyed by op id, not dotted method
+@pytest.mark.parametrize("policy", ["read_only", "guarded", "protected", "full"])
+@pytest.mark.parametrize("path", ["central.api.servers.registry",
+                                  "/api/method/central.api.servers.registry",
+                                  "/api/resource/Site", "/api/resource/Site/abc"])
+def test_central_registered_read_get_allowed(tmp_path, policy, path):
+    c, f = mk(tmp_path, policy)
+    assert call_raw(c, "central", "GET", path) == {"ok": True}
+    assert f.calls
+
+
+def test_central_read_methods_index_consistent():
+    assert pol.CENTRAL_READ_METHODS
+    for m, op in pol.CENTRAL_READ_METHODS.items():
+        assert pol.REGISTRY[op]["kind"] == "read" and pol.REGISTRY[op]["plane"] == "central", (m, op)
+        assert pol.central_read_op(m) == op
+
+
+def test_unregistered_archive_still_denied_read_only(tmp_path):
+    c, f = mk(tmp_path, "read_only")
+    with pytest.raises(PolicyDenied):
+        call_raw(c, "central", "GET", "press.api.site.archive")
+    assert not f.calls
