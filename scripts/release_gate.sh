@@ -37,7 +37,6 @@ hit "real gateway host" "${G[@]}" 'bom\.frappe\.cloud' .
 hit "missing research refs" "${G[@]}" 'research/' . -g '!.gitignore'
 hit "phone numbers" "${G[@]}" -i '\+91[ -]?[0-9]{5}|[0-9]{10}' docs README.md
 hit "hard-coded secrets" "${G[@]}" -i "api[_-]?(key|secret)\s*[:=]\s*[\"'][A-Za-z0-9]{12,}" .
-# call_via_page is intentionally kept (deprecated browser fallback, owner decision) and is not gated.
 for p in docs/bruno spikes PROGRESS.md fcctl/hooks.py docs/SDK_PLAN_V2.md docs/PILOT_SELFHOST_MEMO.md docs/ROLES.md scripts/fcctl-relogin.sh; do
   if [ -e "$p" ]; then echo "GATE HIT: banned path exists: $p"; fail=1; fi
 done

@@ -130,8 +130,7 @@ class DryRunRecorder:
 class CentralClient:
     """Central v2: {base}/api/v2/method/<dotted>; cookie sid + X-Frappe-CSRF-Token.
 
-    `reauth` (fcctl.reauth.Reauther) is invoked once on Auth/Csrf errors; `fallback`
-    (callable(method, path, body) -> data, e.g. the DEPRECATED Browser.call_via_page) on Cloudflare; off by default.
+    `reauth` (fcctl.reauth.Reauther) is invoked once on Auth/Csrf errors. Cloudflare challenges are raised, never solved.
     """
 
     def __init__(self, store: SessionStore, team: str | None = None, base: str = CENTRAL_BASE,
@@ -139,8 +138,6 @@ class CentralClient:
         self.store, self.team, self.base = store, team or store.data.get("team"), base.rstrip("/")
         self.http = http or httpx.Client(timeout=timeout, headers={"User-Agent": UA})
         self.reauth: Any = None
-        self.fallback: Callable[[str, str, Any], Any] | None = None
-        self.mode_used = "http"
 
     # -- build
     def path(self, dotted: str) -> str:
@@ -176,28 +173,12 @@ class CentralClient:
     def call(self, method: str, dotted: str, params: dict | None = None, json: Any = None,
              team: bool = True, _retried: bool = False) -> Any:
         try:
-            self.mode_used = "http"
             return self._once(method, dotted, params, json, team)
         except (AuthError, CsrfError) as e:
             if _retried or not self.reauth:
                 raise
             self.reauth.recover(scope="central", error=e)
             return self.call(method, dotted, params, json, team, _retried=True)
-        except CloudflareChallenge:
-            if not self.fallback:
-                raise
-            import warnings
-            warnings.warn("The browser fallback is deprecated and will be removed; fcctl never solves "
-                          "challenges.", DeprecationWarning, stacklevel=2)
-            self.mode_used = "browser"
-            q = dict(params or {})
-            if team and self.team and "team" not in q and method.upper() == "GET":
-                q["team"] = self.team
-            path = self.path(dotted) + (("?" + str(httpx.QueryParams(q))) if q else "")
-            body = dict(json) if isinstance(json, dict) else json
-            if team and self.team and isinstance(body, dict) and method.upper() != "GET":
-                body.setdefault("team", self.team)
-            return self.fallback(method.upper(), path, body)
 
     def get(self, dotted, **params): return self.call("GET", dotted, params=params)
     def post(self, dotted, **body): return self.call("POST", dotted, json=body)

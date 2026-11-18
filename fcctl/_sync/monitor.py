@@ -20,8 +20,3 @@ def system(p: PilotClient):
 
 def health(p: PilotClient):
     return p.get("/health")
-
-
-def monitor_status(p: PilotClient):
-    """Monitor log sources."""
-    return p.get("/monitor/status")

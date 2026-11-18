@@ -65,8 +65,6 @@ Optional extras:
 | Extra | Adds | Needed for |
 |---|---|---|
 | `yaml` | pyyaml | `-o yaml` output |
-| `s3` | boto3 | copying backups to S3-compatible storage |
-| `browser` | playwright | DEPRECATED, will be removed: library-only Playwright fallback (see [Deprecated: browser fallback](#deprecated-browser-fallback-will-be-removed)) |
 
 Check the install with `fcctl --help`, `fcctl version` and `fcctl guide`.
 
@@ -313,10 +311,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). Endpoin
 - No MCP server yet.
 - Live-verified on Frappe Cloud (Pilot): site create, rename, drop (through the approval gate), app install / `app add --site`, config, logs, backup create/list/schedule, cross-site backup upload, task output, and the full provision workflow from a golden backup (hooks, release, health).
 - Not yet live-tested: bench-only `app add`, `app add --repo`, `app check-updates`, `app remove`, a full `backup restore`, and all server, snapshot, bucket and billing (Central) writes. Treat these as experimental.
-
-## Deprecated: browser fallback (will be removed)
-
-`fcctl.browser.Browser` (Playwright, `pip install -e '.[browser]'` from a clone) and the `fallback` hook on `CentralClient` are deprecated and will be removed. Constructing `Browser` or using the fallback emits a `DeprecationWarning`. Default behaviour is HTTP-only: the fallback runs only if a library user wires it in explicitly. fcctl never solves challenges; the supported login is the plain HTTP path (`send_code`/`verify_code`: manual code, `--code-stdin`, or IMAP).
 
 ## License
 

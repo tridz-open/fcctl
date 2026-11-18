@@ -1,4 +1,4 @@
-"""Object storage buckets on Central + optional boto3 S3 copy."""
+"""Object storage buckets on Central (presigned-URL object access)."""
 from __future__ import annotations
 
 from .central import CentralClient
@@ -19,13 +19,6 @@ async def delete_bucket(c: CentralClient, name: str):
     return await c.call("POST", M + "delete_bucket", json={"name": name})
 
 
-async def list_objects(c: CentralClient, name: str, prefix: str = "", offset=None, limit: int = 100):
-    p = {"name": name, "prefix": prefix, "limit": limit}
-    if offset is not None:
-        p["offset"] = offset
-    return await c.call("GET", M + "list_objects", params=p)
-
-
 async def get_bucket_usage(c: CentralClient, name: str):
     return await c.call("GET", M + "get_bucket_usage", params={"name": name})
 
@@ -37,14 +30,6 @@ async def get_upload_url(c: CentralClient, name: str, key: str, content_type: st
 
 async def get_object_url(c: CentralClient, name: str, key: str):
     return await c.call("GET", M + "get_object_url", params={"name": name, "key": key})
-
-
-async def delete_objects(c: CentralClient, name: str, keys=None, prefixes=None):
-    return await c.call("POST", M + "delete_objects", json={"name": name, "keys": keys or [], "prefixes": prefixes or []})
-
-
-async def rotate_credentials(c: CentralClient, name: str):
-    return await c.call("POST", M + "rotate_credentials", json={"name": name})
 
 
 async def set_bucket_quota(c: CentralClient, name: str, **quota):
@@ -93,16 +78,6 @@ async def get_object(c: CentralClient, name: str, key: str, dest: str):
     with open(dest, "wb") as f:
         f.write(r.content)
     return {"bucket": name, "key": key, "path": dest, "bytes": len(r.content)}
-
-
-def s3_copy(endpoint: str, access_key: str, secret_key: str, bucket: str, key: str, src_path: str):
-    """boto3-optional direct S3 copy using bucket credentials returned by create_bucket/rotate_credentials."""
-    try:
-        import boto3
-    except ImportError as e:  # pragma: no cover
-        raise RuntimeError("pip install fcctl[s3] for S3 copy") from e
-    boto3.client("s3", endpoint_url=endpoint, aws_access_key_id=access_key,
-                 aws_secret_access_key=secret_key).upload_file(src_path, bucket, key)
 
 
 # ---- v1 wrapper names (SDK: buckets.list/usage/quota/delete)

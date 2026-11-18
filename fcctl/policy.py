@@ -15,15 +15,11 @@ def _o(kind, plane, method):
 REGISTRY: dict[str, dict] = {
     # servers (central)
     "server.list": _o("read", "central", "GET"), "server.overview": _o("read", "central", "GET"),
-    "server.action_status": _o("read", "central", "GET"),
-    "server.create": _o("write", "central", "POST"), "server.clone_from_snapshot": _o("write", "central", "POST"),
+    "server.create": _o("write", "central", "POST"),
     "server.resize": _o("cost", "central", "POST"), "server.set_termination_protection": _o("write", "central", "POST"),
     "server.terminate": _o("destructive", "central", "POST"),
     # snapshots
-    "snapshot.list": _o("read", "central", "GET"), "snapshot.pricing": _o("read", "central", "GET"),
-    "snapshot.take": _o("write", "central", "POST"), "snapshot.keep": _o("write", "central", "POST"),
-    "snapshot.set_automatic": _o("write", "central", "POST"),
-    "snapshot.restore_as_new_server": _o("write", "central", "POST"),
+    "snapshot.list": _o("read", "central", "GET"), "snapshot.take": _o("write", "central", "POST"),
     "snapshot.delete": _o("destructive", "central", "POST"),
     # objects / buckets
     "bucket.get": _o("read", "central", "GET"), "objects.list": _o("read", "central", "GET"),
@@ -31,12 +27,10 @@ REGISTRY: dict[str, dict] = {
     "bucket.create": _o("write", "central", "POST"), "objects.upload_url": _o("write", "central", "POST"),
     "objects.upload": _o("write", "central", "PUT"), "bucket.set_quota": _o("write", "central", "POST"),
     "bucket.delete": _o("destructive", "central", "POST"), "objects.delete": _o("destructive", "central", "POST"),
-    "bucket.rotate_credentials": _o("destructive", "central", "POST"),
     # billing / monitor / alerts
     "billing.eligible_plans": _o("read", "central", "GET"), "billing.trust_tier": _o("read", "central", "GET"),
     "monitor.central_metrics": _o("read", "central", "GET"), "monitor.metrics": _o("read", "pilot", "GET"),
     "monitor.system": _o("read", "pilot", "GET"), "monitor.health": _o("read", "pilot", "GET"),
-    "monitor.status": _o("read", "pilot", "GET"),
     # logs
     "logs.list": _o("read", "pilot", "GET"), "logs.content": _o("read", "pilot", "GET"),
     "logs.tail": _o("read", "pilot", "GET"), "logs.task_events": _o("read", "pilot", "GET"),

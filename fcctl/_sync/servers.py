@@ -22,10 +22,6 @@ def overview(c: CentralClient, resource_id: str):
     return c.call("GET", M + "server_overview", params={"resource_id": resource_id})
 
 
-def action_status(c: CentralClient, name: str):
-    return c.call("GET", M + "action_status", params={"name": name}, team=False)
-
-
 def create_server(c: CentralClient, title: str, plan: str, image_id: str, region: str = "bom",
                   hostname: str | None = None, snapshot: str | None = None, ssh_key_ids=None,
                   has_public_ipv4: bool = False, has_public_ipv6: bool = True,
@@ -39,10 +35,6 @@ def create_server(c: CentralClient, title: str, plan: str, image_id: str, region
     if snapshot:
         body["snapshot"] = snapshot
     return c.call("POST", M + "create_server", json=body)
-
-
-def clone_from_snapshot(c: CentralClient, snapshot: str, **kw):
-    return create_server(c, snapshot=snapshot, **kw)
 
 
 def _act(name):

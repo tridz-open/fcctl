@@ -51,64 +51,37 @@ def test_typed_errors(central):
 
 
 @respx.mock
-def test_cloudflare_detection_and_browser_fallback(central):
+def test_cloudflare_detection(central):
     cf = httpx.Response(403, text="<!DOCTYPE html><title>Just a moment...</title>", headers={"cf-ray": "1", "content-type": "text/html"})
     assert is_cloudflare_challenge(cf)
     assert not is_cloudflare_challenge(httpx.Response(403, json={"exc_type": "PermissionError"}))
     respx.get(BASE + "/api/v2/method/a.b").mock(return_value=cf)
     with pytest.raises(CloudflareChallenge):
         central.call("GET", "a.b")
-    seen = []
-    central.fallback = lambda m, p, b: seen.append((m, p)) or {"ok": 1}
-    with pytest.warns(DeprecationWarning):
-        assert central.call("GET", "a.b") == {"ok": 1}
-    assert seen[0][1].startswith("/api/v2/method/a.b?team=TEAM-1") and central.mode_used == "browser"
-
-
-class FakeBrowser:
-    csrf = None
-    def __init__(self, sid=None): self.sid = sid; self.logins = 0
-    def cookies(self): return {"sid": self.sid} if self.sid else {}
-    def ensure_logged_in(self, alerter=None): self.logins += 1; self.sid = "sidB"
 
 
 @respx.mock
-def test_reauth_order_cookies_csrf_browser_alert(central, store):
-    # profile always fails -> all steps tried, then alert
+def test_reauth_order_csrf_alert(central, store):
+    # profile always fails -> csrf step tried, then alert
     respx.get(PROFILE).mock(return_value=httpx.Response(401, json={"exc_type": "AuthenticationError"}))
     respx.get(BASE + "/dashboard").mock(return_value=httpx.Response(200, text="no token"))
     class Al:
         n = 0
         def send(self, *a, **k): Al.n += 1
-    ra = Reauther(store, central, browser=FakeBrowser(sid="stale"), alerter=Al())
+    ra = Reauther(store, central, alerter=Al())
     with pytest.raises(ReauthFailed):
         ra.recover("central")
-    assert ra.trail == ["cookies", "csrf", "browser_login", "alert"] and Al.n == 1
+    assert ra.trail == ["csrf", "alert"] and Al.n == 1
 
 
 @respx.mock
 def test_reauth_stops_at_first_success_and_retries_call(central, store):
-    ok = httpx.Response(200, json={"data": {}})
-    respx.get(PROFILE).mock(side_effect=[ok])  # health check after cookie reload
+    respx.get(PROFILE).mock(return_value=httpx.Response(200, json={"data": {}}, headers={"x-frappe-csrf-token": "fresh"}))
     seq = respx.get(BASE + "/api/v2/method/a.b").mock(side_effect=[
         httpx.Response(403, json={"exc_type": "CSRFTokenError"}), httpx.Response(200, json={"data": 7})])
-    ra = Reauther(store, central, browser=FakeBrowser(sid="fresh"))
+    ra = Reauther(store, central)
     assert central.call("GET", "a.b") == 7
-    assert ra.trail == ["cookies"] and store.sid == "fresh" and seq.call_count == 2
-
-
-@respx.mock
-def test_reauth_single_flight(central, store):
-    import threading
-    import time
-    respx.get(PROFILE).mock(return_value=httpx.Response(200, json={"data": {}}))
-    b = FakeBrowser(sid="fresh")
-    orig = b.cookies
-    b.cookies = lambda: (time.sleep(0.2), orig())[1]
-    ra = Reauther(store, central, browser=b)
-    ts = [threading.Thread(target=ra.recover, args=("central",)) for _ in range(4)]
-    [t.start() for t in ts]; [t.join() for t in ts]
-    assert ra.trail.count("cookies") == 1
+    assert ra.trail == ["csrf"] and seq.call_count == 2
 
 
 @respx.mock
