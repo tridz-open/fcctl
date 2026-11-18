@@ -1,6 +1,6 @@
 # fcctl
 
-Part of **Frappe SaaS**. Docs: https://tridz-open.github.io/frappe-saaskit/
+Part of **Frappe SaaS**. Docs: https://frappesaas.tridz.in/
 
 > [!WARNING]
 > **ALPHA SOFTWARE. Bleeding edge. Read before you use it.**

@@ -16,7 +16,7 @@ hit() { # hit <description> <command...>: any output = failure
 
 hit "GSTIN" "${G[@]}" -i '\b[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]\b' .
 # 'tridz' is allowed only as the project URL (tridz-open/fcctl and sibling repos) or the copyright holder (Tridz Technologies)
-hit "tridz" bash -c "$(printf '%q ' "${G[@]}") -i tridz . | rg -v 'tridz-open/(fcctl|saas_core|frappe-saaskit-(sdk|starter))|tridz-open\.github\.io/frappe-saaskit|Tridz Technologies'"
+hit "tridz" bash -c "$(printf '%q ' "${G[@]}") -i tridz . | rg -v 'tridz-open/(fcctl|saas_core|frappe-saaskit-(sdk|starter))|tridz-open\.github\.io/frappe-saaskit|frappesaas\.tridz\.in|Tridz Technologies'"
 # Real names, team/server ids and other private values are never written in this repo: list them, one regex per
 # line, in an UNTRACKED file (default .release-denylist, gitignored, or RELEASE_DENYLIST=<path>).
 DENY="${RELEASE_DENYLIST:-.release-denylist}"
