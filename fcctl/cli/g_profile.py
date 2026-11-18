@@ -13,6 +13,20 @@ def _row(p, current=None):
     return d
 
 
+def _pins(items):
+    """NAME=BASE64_PUBKEY pairs (from `fcctl approval keygen`) -> dict."""
+    from ..errors import UsageError
+    out = {}
+    for it in items or ():
+        name, sep, key = it.partition("=")
+        if not sep or not name.strip() or not key.strip():
+            raise UsageError("bad --approver-pubkey", what=f"{it!r} is not NAME=PUBLIC_KEY",
+                             why="a pinned key needs the approver name and the base64 public key",
+                             fix="use e.g. --approver-pubkey alice=<key from `fcctl approval keygen`>")
+        out[name.strip()] = key.strip()
+    return out
+
+
 def list_(ctx, args):
     cur = ctx.profiles.current()
     return [_row(p, cur) for p in ctx.profiles.list()]
@@ -31,7 +45,8 @@ def show(ctx, args):
 
 def create(ctx, args):
     from ..profiles import Profile
-    p = Profile(args.name, args.email, args.team, args.policy, tuple(args.allow or ()), args.session_ref)
+    p = Profile(args.name, args.email, args.team, args.policy, tuple(args.allow or ()), args.session_ref,
+                approver_pubkeys=_pins(args.approver_pubkey))
     return _row(ctx.profiles.create(p))
 
 
@@ -51,6 +66,8 @@ def set_(ctx, args):
             ch[k] = getattr(args, k)
     if args.allow is not None:
         ch["allow"] = tuple(args.allow)
+    if args.approver_pubkey:
+        ch["approver_pubkeys"] = {**old.approver_pubkeys, **_pins(args.approver_pubkey)}
     return _row(ctx.profiles.set(Profile(**{**dataclasses.asdict(old), **ch})))
 
 
@@ -74,6 +91,8 @@ def register(sub, common):
     x.add_argument("name"); x.add_argument("--email", required=True); x.add_argument("--team", required=True)
     x.add_argument("--policy", default="guarded", choices=["full", "guarded", "read_only", "protected"])
     x.add_argument("--allow", action="append"); x.add_argument("--session-ref")
+    x.add_argument("--approver-pubkey", action="append", metavar="NAME=PUBKEY",
+                   help="pin an approver Ed25519 public key; the profile then requires signed approvals (repeatable)")
     x.set_defaults(func=create)
     x = add_cmd(gs, common, "use", "make a profile the active one", "fcctl profile use main")
     x.add_argument("name"); x.set_defaults(func=use)
@@ -81,6 +100,8 @@ def register(sub, common):
     x.add_argument("name"); x.add_argument("--email"); x.add_argument("--team")
     x.add_argument("--policy", choices=["full", "guarded", "read_only", "protected"])
     x.add_argument("--allow", action="append"); x.add_argument("--session-ref")
+    x.add_argument("--approver-pubkey", action="append", metavar="NAME=PUBKEY",
+                   help="pin an approver Ed25519 public key; the profile then requires signed approvals (repeatable)")
     x.set_defaults(func=set_)
     x = add_cmd(gs, common, "delete", "delete a profile", "fcctl profile delete old-profile")
     x.add_argument("name"); x.set_defaults(func=delete)

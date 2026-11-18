@@ -12,16 +12,16 @@ What it is not: a two-person control. Requester and approver are plain strings t
 secret on one machine can approve their own request by supplying a different approver name. For real
 separation of duties use separate Frappe Cloud accounts with restricted roles.
 
-Optional hardening: set FCCTL_APPROVER_KEY, a secret SEPARATE from FCCTL_KEY and FCCTL_APPROVAL_SECRET (it must
-differ from both; `approve` refuses otherwise). `approve` then stores an HMAC-SHA256 signature over (approval id,
-op, target, args digest, approver name, timestamp) in the record, and execution verifies it against the verifier's
-FCCTL_APPROVER_KEY; a missing/invalid signature is refused. This only adds real separation when the signing
-key lives with the approver (e.g. a CI job or second machine) and the executing side verifies with the same key
-while the requester never holds it. With FCCTL_APPROVER_KEY unset nothing changes and single-machine
-self-approval remains a speed bump. FCCTL_REQUIRE_SIGNED_APPROVAL=1 (or --require-signed) makes execution reject
-unsigned approvals.
+Optional hardening (Ed25519 signed approvals): the approver holds a private key (`fcctl approval keygen`) in
+FCCTL_APPROVER_PRIVATE_KEY or the file named by FCCTL_APPROVER_PRIVATE_KEY_FILE; the executing side pins the matching
+PUBLIC key per profile in config.toml (`approver_pubkeys`, approver name -> base64 key). A profile with a pinned key
+automatically requires a valid signature, from the pinned key of the named approver, over (approval id, op hash,
+profile, team, expiry, approver name). The executor holds no secret that can forge one; a signature can also be made
+elsewhere (`fcctl approval sign`) and passed with `approve --signature`. Profiles without pinned keys are unchanged
+and single-machine self-approval remains a speed bump. FCCTL_REQUIRE_SIGNED_APPROVAL=1 (or --require-signed) also
+rejects unsigned approvals for profiles without pins (and then fails closed, since nothing can verify them).
 
-Env: FCCTL_KEY (signing), FCCTL_APPROVAL_SECRET, FCCTL_APPROVER_KEY, FCCTL_REQUIRE_SIGNED_APPROVAL, FCCTL_USER (requester identity, default OS user),
+Env: FCCTL_KEY (signing), FCCTL_APPROVAL_SECRET, FCCTL_APPROVER_PRIVATE_KEY[_FILE], FCCTL_REQUIRE_SIGNED_APPROVAL, FCCTL_USER (requester identity, default OS user),
 FCCTL_HOME (store dir: approvals.json, audit.jsonl).
 """
 from __future__ import annotations
@@ -78,9 +78,9 @@ class Tampered(GuardError):
 
 
 class BadApprovalSignature(GuardError):
-    default_why = "The approval carries no valid approver signature for this verifier's FCCTL_APPROVER_KEY."
-    default_fix = ("Have the approver approve with the shared FCCTL_APPROVER_KEY set, and make sure the executing "
-                   "side has the same key; or unset --require-signed / FCCTL_REQUIRE_SIGNED_APPROVAL.")
+    default_why = "The approval carries no valid Ed25519 signature from the approver key pinned for this profile."
+    default_fix = ("Have the approver sign with their private key (FCCTL_APPROVER_PRIVATE_KEY[_FILE] or "
+                   "`fcctl approval sign`), and check `approver_pubkeys` in the profile matches their public key.")
 
 
 class NotPending(GuardError):
@@ -105,17 +105,72 @@ class PendingApproval:
     result: object = None
     approver_sig: str | None = None
     approved_at: float | None = None
+    profile: str = ""
+    team: str = ""
 
 
 def _args_digest(args: Any) -> str:
     return hashlib.sha256(json.dumps(args, sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
 
 
-def approval_signature(key: str, rec: "PendingApproval", approver: str, ts: float) -> str:
-    """HMAC-SHA256 over (id, op, target, args digest, approver, timestamp) with the approver key."""
-    body = json.dumps([rec.id, rec.op, rec.target, _args_digest(rec.args), approver, ts],
+def _op_hash(rec: "PendingApproval") -> str:
+    body = json.dumps([rec.op, rec.target, _args_digest(rec.args), rec.kind, rec.server],
                       separators=(",", ":"), default=str).encode()
-    return hmac.new(key.encode(), body, hashlib.sha256).hexdigest()
+    return hashlib.sha256(body).hexdigest()
+
+
+def approval_body(rec: "PendingApproval", approver: str) -> bytes:
+    """Canonical signed body: approval id, op hash, profile, team, expiry and approver name."""
+    return b"fcctl-approval-v1\n" + json.dumps(
+        {"id": rec.id, "op_hash": _op_hash(rec), "profile": rec.profile, "team": rec.team,
+         "expires_at": rec.expires_at, "approver": approver}, sort_keys=True, separators=(",", ":")).encode()
+
+
+def generate_keypair() -> tuple[str, str]:
+    """(private, public) as base64 of the raw 32-byte Ed25519 keys."""
+    from cryptography.hazmat.primitives import serialization as ser
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    k = Ed25519PrivateKey.generate()
+    priv = k.private_bytes(ser.Encoding.Raw, ser.PrivateFormat.Raw, ser.NoEncryption())
+    pub = k.public_key().public_bytes(ser.Encoding.Raw, ser.PublicFormat.Raw)
+    return base64.b64encode(priv).decode(), base64.b64encode(pub).decode()
+
+
+def load_private_key(env: Any = None) -> str:
+    """Approver private key (base64) from FCCTL_APPROVER_PRIVATE_KEY or the file in ..._KEY_FILE; '' if unset."""
+    env = os.environ if env is None else env
+    if env.get("FCCTL_APPROVER_PRIVATE_KEY"):
+        return str(env["FCCTL_APPROVER_PRIVATE_KEY"]).strip()
+    path = env.get("FCCTL_APPROVER_PRIVATE_KEY_FILE")
+    if path:
+        try:
+            return Path(path).read_text().strip()
+        except OSError as e:
+            raise GuardError(f"cannot read FCCTL_APPROVER_PRIVATE_KEY_FILE: {e}",
+                             fix="check the path and permissions of the approver key file") from e
+    return ""
+
+
+def sign_approval(private_key: str, rec: "PendingApproval", approver: str) -> str:
+    """Ed25519 signature (base64) over the approval body."""
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    try:
+        k = Ed25519PrivateKey.from_private_bytes(base64.b64decode(private_key, validate=True))
+    except (ValueError, binascii.Error) as e:
+        raise GuardError("approver private key is not a base64 Ed25519 key",
+                         fix="generate one with `fcctl approval keygen`") from e
+    return base64.b64encode(k.sign(approval_body(rec, approver))).decode()
+
+
+def verify_approval(public_key: str, rec: "PendingApproval", approver: str, sig: str) -> bool:
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    try:
+        Ed25519PublicKey.from_public_bytes(base64.b64decode(public_key, validate=True)).verify(
+            base64.b64decode(sig, validate=True), approval_body(rec, approver))
+        return True
+    except (InvalidSignature, ValueError, binascii.Error):
+        return False
 
 
 def new_secret() -> str:
@@ -147,8 +202,9 @@ def totp(secret: str, at: float | None = None, step: int = 30) -> str:
 class Guard:
     def __init__(self, home: str | Path | None = None, key: str | None = None, secret: str | None = None,
                  alerter: Any = None, now: Callable[[], float] = time.time, user: str | None = None,
-                 approver_key: str | None = None, verifier_key: str | None = None,
-                 require_signed: bool | None = None) -> None:
+                 approver_private_key: str | None = None,
+                 approver_pubkeys: dict[str, dict[str, str]] | None = None,
+                 profile: str = "", team: str = "", require_signed: bool | None = None) -> None:
         self.home = Path(home or os.environ.get("FCCTL_HOME") or Path.home() / ".fcctl")
         private_dir(self.home)
         from .keys import get_key
@@ -158,8 +214,10 @@ class Guard:
                              fix="run: fcctl init")
         self.secret = secret if secret is not None else os.environ.get("FCCTL_APPROVAL_SECRET", "")
         env = os.environ
-        self.approver_key = approver_key if approver_key is not None else env.get("FCCTL_APPROVER_KEY", "")
-        self.verifier_key = verifier_key if verifier_key is not None else self.approver_key
+        self.approver_private_key = (approver_private_key if approver_private_key is not None
+                                     else load_private_key(env))
+        self.approver_pubkeys = approver_pubkeys or {}  # profile name -> {approver name: base64 public key}
+        self.profile, self.team = profile, team
         self.require_signed = (require_signed if require_signed is not None
                                else env.get("FCCTL_REQUIRE_SIGNED_APPROVAL", "") in ("1", "true", "yes"))
         self.alerter, self.now = alerter, now
@@ -235,12 +293,14 @@ class Guard:
 
     # ---- API ----
     def request(self, op: str, target: Any, args: dict[str, Any], kind: str = "central",
-                server: str | None = None, reason: str = "") -> PendingApproval:
+                server: str | None = None, reason: str = "", profile: str | None = None,
+                team: str | None = None) -> PendingApproval:
         recs = self._load()
         t = self.now()
         rec = PendingApproval(id=uuid.uuid4().hex[:12], op=op, target=str(target), requested_by=self.user,
                               expires_at=t + TTL, reason=reason, args=args, kind=kind, server=server,
-                              created_at=t)
+                              created_at=t, profile=self.profile if profile is None else profile,
+                              team=self.team if team is None else team)
         recs[rec.id] = rec
         self._save(recs)
         self.audit("requested", rec, self.user, reason=reason)
@@ -271,29 +331,36 @@ class Guard:
         if not ok:
             raise BadToken("invalid approval token")
 
-    def _signature_step(self, rec: PendingApproval, approver: str) -> None:
-        """Sign (when an approver key is set) and verify the approval record. Mutates rec only on success."""
-        if self.approver_key and self.approver_key in (self.key.decode(), self.secret):
-            raise GuardError("FCCTL_APPROVER_KEY equals the requester secret",
-                             why="a signing key shared with FCCTL_KEY or FCCTL_APPROVAL_SECRET adds no separation",
-                             fix="set FCCTL_APPROVER_KEY to a distinct secret held only by the approver/verifier")
-        sig, ts, who = rec.approver_sig, rec.approved_at, rec.decided_by or approver
-        if not sig and self.approver_key:
-            ts, who = self.now(), approver
-            sig = approval_signature(self.approver_key, rec, approver, ts)
-        if sig:
-            if not self.verifier_key:
-                if self.require_signed:
-                    raise BadApprovalSignature("cannot verify approval signature: FCCTL_APPROVER_KEY is not set")
-            elif not (ts is not None and hmac.compare_digest(
-                    approval_signature(self.verifier_key, rec, who, ts), sig)):
+    def _signature_step(self, rec: PendingApproval, approver: str, signature: str | None = None) -> None:
+        """Sign (when this process holds an approver private key) and verify against the profile's pinned keys.
+
+        A profile with pinned keys requires a valid signature from the named approver's pinned key. Profiles
+        without pins stay unsigned unless require_signed is set (which then fails closed). Mutates rec on success.
+        """
+        pins = self.approver_pubkeys.get(rec.profile) or {}
+        sig = signature or rec.approver_sig
+        if not sig and self.approver_private_key:
+            sig = sign_approval(self.approver_private_key, rec, approver)
+        if pins:
+            pub = pins.get(approver)
+            if pub is None:
+                raise BadApprovalSignature(f"approver {approver!r} has no pinned key for profile {rec.profile!r}")
+            if not sig:
+                raise BadApprovalSignature(f"approval {rec.id} is unsigned but profile {rec.profile!r} pins an "
+                                           "approver key")
+            if not verify_approval(pub, rec, approver, sig):
                 raise BadApprovalSignature(f"approval {rec.id} signature does not verify")
         elif self.require_signed:
-            raise BadApprovalSignature(f"approval {rec.id} is unsigned and signed approval is required")
-        rec.approver_sig, rec.approved_at = sig, ts
+            raise BadApprovalSignature(f"approval {rec.id} cannot be verified: no approver key is pinned for "
+                                       f"profile {rec.profile!r} and signed approval is required")
+        elif sig:
+            sig = None  # nothing pinned: an unverifiable signature must not be recorded as if it counted
+        rec.approver_sig = sig
+        rec.approved_at = self.now() if sig else None
 
     def approve(self, pid: str, approver: str, token: str,
-                client_factory: Callable[[str, str | None], Any] | None = None) -> Any:
+                client_factory: Callable[[str, str | None], Any] | None = None,
+                signature: str | None = None) -> Any:
         recs = self._load()
         rec = recs.get(pid)
         if rec is None:
@@ -317,7 +384,7 @@ class Guard:
             self.audit("bad_token", rec, approver)
             raise
         try:
-            self._signature_step(rec, approver)
+            self._signature_step(rec, approver, signature)
         except GuardError as e:
             self.audit("signature_rejected", rec, approver, error=str(e))
             raise

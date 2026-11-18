@@ -19,6 +19,8 @@
 - [`fcctl approval execute`](#fcctl-approval-execute)
 - [`fcctl approval deny`](#fcctl-approval-deny)
 - [`fcctl approval enroll`](#fcctl-approval-enroll)
+- [`fcctl approval keygen`](#fcctl-approval-keygen)
+- [`fcctl approval sign`](#fcctl-approval-sign)
 - [`fcctl audit`](#fcctl-audit)
 - [`fcctl audit list`](#fcctl-audit-list)
 - [`fcctl audit verify`](#fcctl-audit-verify)
@@ -280,7 +282,7 @@ Global options (--profile, --server, --output, --dry-run, ...) are listed in `fc
 
 ## fcctl approval
 
-approval step for guarded ops (a speed bump unless FCCTL_APPROVER_KEY is set)
+approval step for guarded ops (a speed bump unless the profile pins an approver key)
 
 Usage: `fcctl approval [-h] COMMAND ...`
 
@@ -326,13 +328,14 @@ Global options (--profile, --server, --output, --dry-run, ...) are listed in `fc
 
 approve a pending request (executes it by default)
 
-Usage: `fcctl approval approve [-h] [--approver APPROVER] [--require-signed] [--execute] id`
+Usage: `fcctl approval approve [-h] [--approver APPROVER] [--require-signed] [--signature SIGNATURE] [--execute] id`
 
 | Flag | Metavar | Choices | Default | Help |
 | --- | --- | --- | --- | --- |
 | `id` |  |  |  |  |
 | `--approver` | `APPROVER` |  |  |  |
-| `--require-signed` |  |  |  | reject approvals lacking a valid FCCTL_APPROVER_KEY signature (or set FCCTL_REQUIRE_SIGNED_APPROVAL=1) |
+| `--require-signed` |  |  |  | reject approvals lacking a valid approver signature (or set FCCTL_REQUIRE_SIGNED_APPROVAL=1); automatic when the profile pins keys |
+| `--signature` | `SIGNATURE` |  |  | base64 signature from `fcctl approval sign` (or env FCCTL_APPROVAL_SIGNATURE) |
 | `--execute` |  |  |  | (default) execute on approval |
 
 Examples:
@@ -346,13 +349,14 @@ Global options (--profile, --server, --output, --dry-run, ...) are listed in `fc
 
 execute an approved request
 
-Usage: `fcctl approval execute [-h] [--approver APPROVER] [--require-signed] id`
+Usage: `fcctl approval execute [-h] [--approver APPROVER] [--require-signed] [--signature SIGNATURE] id`
 
 | Flag | Metavar | Choices | Default | Help |
 | --- | --- | --- | --- | --- |
 | `id` |  |  |  |  |
 | `--approver` | `APPROVER` |  |  |  |
-| `--require-signed` |  |  |  | reject approvals lacking a valid FCCTL_APPROVER_KEY signature (or set FCCTL_REQUIRE_SIGNED_APPROVAL=1) |
+| `--require-signed` |  |  |  | reject approvals lacking a valid approver signature (or set FCCTL_REQUIRE_SIGNED_APPROVAL=1); automatic when the profile pins keys |
+| `--signature` | `SIGNATURE` |  |  | base64 signature from `fcctl approval sign` (or env FCCTL_APPROVAL_SIGNATURE) |
 
 Examples:
 
@@ -389,6 +393,37 @@ Examples:
 
 ```
 fcctl approval enroll
+Global options (--profile, --server, --output, --dry-run, ...) are listed in `fcctl --help`.
+```
+
+## fcctl approval keygen
+
+generate an approver Ed25519 key pair
+
+Usage: `fcctl approval keygen [-h]`
+
+Examples:
+
+```
+fcctl approval keygen
+Global options (--profile, --server, --output, --dry-run, ...) are listed in `fcctl --help`.
+```
+
+## fcctl approval sign
+
+sign a pending approval with the approver private key
+
+Usage: `fcctl approval sign [-h] [--approver APPROVER] id`
+
+| Flag | Metavar | Choices | Default | Help |
+| --- | --- | --- | --- | --- |
+| `id` |  |  |  |  |
+| `--approver` | `APPROVER` |  |  |  |
+
+Examples:
+
+```
+fcctl approval sign APPROVAL_ID --approver alice
 Global options (--profile, --server, --output, --dry-run, ...) are listed in `fcctl --help`.
 ```
 
@@ -1327,7 +1362,7 @@ Global options (--profile, --server, --output, --dry-run, ...) are listed in `fc
 
 create a profile
 
-Usage: `fcctl profile create [-h] --email EMAIL --team TEAM [--policy {full,guarded,read_only,protected}] [--allow ALLOW] [--session-ref SESSION_REF] name`
+Usage: `fcctl profile create [-h] --email EMAIL --team TEAM [--policy {full,guarded,read_only,protected}] [--allow ALLOW] [--session-ref SESSION_REF] [--approver-pubkey NAME=PUBKEY] name`
 
 | Flag | Metavar | Choices | Default | Help |
 | --- | --- | --- | --- | --- |
@@ -1337,6 +1372,7 @@ Usage: `fcctl profile create [-h] --email EMAIL --team TEAM [--policy {full,guar
 | `--policy` | `POLICY` | `full, guarded, read_only, protected` | `guarded` |  |
 | `--allow` | `ALLOW` |  |  |  |
 | `--session-ref` | `SESSION_REF` |  |  |  |
+| `--approver-pubkey` | `NAME=PUBKEY` |  |  | pin an approver Ed25519 public key; the profile then requires signed approvals (repeatable) |
 
 Examples:
 
@@ -1366,7 +1402,7 @@ Global options (--profile, --server, --output, --dry-run, ...) are listed in `fc
 
 change fields of a profile
 
-Usage: `fcctl profile set [-h] [--email EMAIL] [--team TEAM] [--policy {full,guarded,read_only,protected}] [--allow ALLOW] [--session-ref SESSION_REF] name`
+Usage: `fcctl profile set [-h] [--email EMAIL] [--team TEAM] [--policy {full,guarded,read_only,protected}] [--allow ALLOW] [--session-ref SESSION_REF] [--approver-pubkey NAME=PUBKEY] name`
 
 | Flag | Metavar | Choices | Default | Help |
 | --- | --- | --- | --- | --- |
@@ -1376,6 +1412,7 @@ Usage: `fcctl profile set [-h] [--email EMAIL] [--team TEAM] [--policy {full,gua
 | `--policy` | `POLICY` | `full, guarded, read_only, protected` |  |  |
 | `--allow` | `ALLOW` |  |  |  |
 | `--session-ref` | `SESSION_REF` |  |  |  |
+| `--approver-pubkey` | `NAME=PUBKEY` |  |  | pin an approver Ed25519 public key; the profile then requires signed approvals (repeatable) |
 
 Examples:
 

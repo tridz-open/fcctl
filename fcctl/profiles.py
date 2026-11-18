@@ -19,6 +19,7 @@ class Profile:
     owner: str | None = None
     owner_id: str | None = None
     session_store: str | None = None
+    approver_pubkeys: dict[str, str] = field(default_factory=dict)  # approver name -> base64 Ed25519 public key
 
     def __post_init__(self):
         if self.policy not in POLICIES:
@@ -32,7 +33,8 @@ def parse_profiles(data: dict) -> list[Profile]:
         if not login or not p.get("team"):
             raise ValueError(f"profile {name!r}: email/login and team are required")
         out.append(Profile(name, login, p["team"], p.get("policy", "guarded"), tuple(p.get("allow", ())),
-                           p.get("session_ref"), p.get("owner"), p.get("owner_id"), p.get("session_store")))
+                           p.get("session_ref"), p.get("owner"), p.get("owner_id"), p.get("session_store"),
+                           dict(p.get("approver_pubkeys") or {})))
     return out
 
 

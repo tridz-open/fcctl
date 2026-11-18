@@ -13,7 +13,7 @@ from typing import Any
 
 REDACTED = "[REDACTED]"
 MASK = "***"
-ENV_SECRETS = ("FCCTL_KEY", "FCCTL_APPROVER_KEY", "FCCTL_APPROVAL_SECRET")
+ENV_SECRETS = ("FCCTL_KEY", "FCCTL_APPROVER_KEY", "FCCTL_APPROVER_PRIVATE_KEY", "FCCTL_APPROVAL_SECRET")
 
 # dict keys whose whole value is masked
 SECRET_KEY_RE = re.compile(

@@ -1,8 +1,8 @@
-"""approval: list / show / approve / deny / execute / enroll (wraps fcctl.guard).
+"""approval: list / show / approve / deny / execute / enroll / keygen / sign (wraps fcctl.guard).
 
-A speed bump against accidents and agents, not a two-person control: approver names are not authenticated.
-Optional hardening: set FCCTL_APPROVER_KEY (distinct from FCCTL_KEY and FCCTL_APPROVAL_SECRET) so approvals are
-HMAC-signed and verified at execution; this is real separation only if the requester never holds that key.
+A speed bump against accidents and agents, not a two-person control, unless the profile pins an approver Ed25519
+public key (`approver_pubkeys`): approvals must then carry a valid signature from the approver's private key
+(FCCTL_APPROVER_PRIVATE_KEY[_FILE]), which the executing side never needs to hold.
 """
 from __future__ import annotations
 
@@ -35,16 +35,14 @@ def show(ctx, args):
 
 def approve(ctx, args):
     g, env = ctx.guard, ctx.env
-    if env.get("FCCTL_APPROVER_KEY"):
-        g.approver_key = env["FCCTL_APPROVER_KEY"]
-        g.verifier_key = g.verifier_key or g.approver_key
-    else:
-        print("fcctl: note: FCCTL_APPROVER_KEY is not set; single-machine self-approval is a speed bump, "
-              "not a two-person control.", file=sys.stderr)
     if getattr(args, "require_signed", False) or env.get("FCCTL_REQUIRE_SIGNED_APPROVAL") in ("1", "true", "yes"):
         g.require_signed = True
+    if not g.approver_pubkeys.get(g.profile):
+        print("fcctl: note: no approver_pubkeys pinned for this profile; single-machine self-approval is a speed "
+              "bump, not a two-person control.", file=sys.stderr)
     approver = args.approver or ctx.guard.user
-    return ctx.guard.approve(args.id, approver, _token(ctx, args), ctx.client_factory())
+    sig = getattr(args, "signature", None) or env.get("FCCTL_APPROVAL_SIGNATURE") or None
+    return ctx.guard.approve(args.id, approver, _token(ctx, args), ctx.client_factory(), signature=sig)
 
 
 def deny(ctx, args):
@@ -64,13 +62,37 @@ def enroll(ctx, args):
                     "set FCCTL_APPROVAL_SECRET for the process that checks codes; it is shown once"}
 
 
+def keygen(ctx, args):
+    from ..guard import generate_keypair
+    priv, pub = generate_keypair()
+    return {"FCCTL_APPROVER_PRIVATE_KEY": priv, "public_key": pub,
+            "note": "keep the private key with the approver only (env FCCTL_APPROVER_PRIVATE_KEY, or a 0600 file "
+                    f"named by FCCTL_APPROVER_PRIVATE_KEY_FILE); it is shown once. Pin the public key: "
+                    f"fcctl profile set PROFILE --approver-pubkey NAME={pub}"}
+
+
+def sign(ctx, args):
+    """Sign a pending approval with the approver's private key; pass the result to `approve --signature`."""
+    from ..guard import GuardError, NotPending, load_private_key, sign_approval
+    rec = ctx.guard._load().get(args.id)
+    if rec is None:
+        raise NotPending(f"no such approval {args.id}")
+    priv = load_private_key(ctx.env)
+    if not priv:
+        raise GuardError("no approver private key", why="signing needs FCCTL_APPROVER_PRIVATE_KEY[_FILE]",
+                         fix="run `fcctl approval keygen` and export the private key on the approver's machine")
+    approver = args.approver or ctx.guard.user
+    return {"id": rec.id, "approver": approver, "signature": sign_approval(priv, rec, approver)}
+
+
 def register(sub, common):
-    gs = add_group(sub, common, "approval", "approval step for guarded ops (a speed bump unless FCCTL_APPROVER_KEY is set)",
+    gs = add_group(sub, common, "approval", "approval step for guarded ops (a speed bump unless the profile pins an approver key)",
                    ["fcctl approval list", "fcctl approval approve APPROVAL_ID --approver alice"], "approval_cmd",
                    description="Approval step for guarded ops. Self-approval on one machine is a speed bump, not a "
-                               "two-person control. Set FCCTL_APPROVER_KEY (a secret distinct from FCCTL_KEY and "
-                               "FCCTL_APPROVAL_SECRET, held by the approver/verifier, e.g. CI) to sign approvals; "
-                               "execution then verifies the signature. --require-signed rejects unsigned ones.")
+                               "two-person control. Pin an approver Ed25519 public key on the profile "
+                               "(`fcctl profile set P --approver-pubkey NAME=KEY`, key from `approval keygen`) and "
+                               "approvals must be signed by that approver's private key; the profile then requires "
+                               "signatures automatically. --require-signed also rejects unsigned ones elsewhere.")
     add_cmd(gs, common, "list", "list pending approvals", "fcctl approval list").set_defaults(func=list_)
     x = add_cmd(gs, common, "show", "show one approval request", "fcctl approval show APPROVAL_ID")
     x.add_argument("id"); x.set_defaults(func=show)
@@ -81,8 +103,10 @@ def register(sub, common):
         x = add_cmd(gs, common, name, h, ex); x.add_argument("id")
         x.add_argument("--approver")
         x.add_argument("--require-signed", action="store_true",
-                       help="reject approvals lacking a valid FCCTL_APPROVER_KEY signature "
-                            "(or set FCCTL_REQUIRE_SIGNED_APPROVAL=1)")
+                       help="reject approvals lacking a valid approver signature "
+                            "(or set FCCTL_REQUIRE_SIGNED_APPROVAL=1); automatic when the profile pins keys")
+        x.add_argument("--signature", help="base64 signature from `fcctl approval sign` "
+                                           "(or env FCCTL_APPROVAL_SIGNATURE)")
         if name == "approve":
             x.add_argument("--execute", action="store_true", help="(default) execute on approval")
         x.set_defaults(func=fn)
@@ -90,3 +114,8 @@ def register(sub, common):
     x.add_argument("id"); x.add_argument("--approver")
     x.set_defaults(func=deny)
     add_cmd(gs, common, "enroll", "generate an approval secret", "fcctl approval enroll").set_defaults(func=enroll)
+    add_cmd(gs, common, "keygen", "generate an approver Ed25519 key pair", "fcctl approval keygen").set_defaults(func=keygen)
+    x = add_cmd(gs, common, "sign", "sign a pending approval with the approver private key",
+                "fcctl approval sign APPROVAL_ID --approver alice")
+    x.add_argument("id"); x.add_argument("--approver")
+    x.set_defaults(func=sign)
