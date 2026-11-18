@@ -4,6 +4,8 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+## [0.1.0a2] - 2026-11-18
+
 ### Changed
 - `provision` workflow: new final `release` step (after `hooks`/`config`, before `health`) lifts `maintenance_mode` and `pause_scheduler` set by `isolate`/`reisolate`; it is idempotent (no write if the template already did it) and skipped with `keep_isolated=True`. Previously sites stayed at 503 unless the template added `core.maintenance_off` and `core.scheduler_resume`. `keep_isolated` is a runtime option, not part of the journaled recipe, so journals from before this step resume and run it.
 - `core.set_host_name` and `core.set_fresh_encryption_key` now raise `UsageError` ("Pilot manages host_name; remove core.set_host_name from the template"): Pilot rejects both keys with 422 `protected_configuration`. They stay registered so old templates fail fast.
