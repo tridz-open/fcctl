@@ -33,17 +33,44 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.parse import quote
 
+from .errors import KEY_CMD
 from ._fs import open_private, private_dir
 
 TTL = 30 * 60
 
 
-class GuardError(Exception): ...
-class SelfApproval(GuardError): ...
-class Expired(GuardError): ...
-class BadToken(GuardError): ...
-class Tampered(GuardError): ...
-class NotPending(GuardError): ...
+class GuardError(Exception):
+    default_why = "The approvals guard refused the request."
+    default_fix = "List pending approvals with `fcctl approval list` and check FCCTL_KEY."
+
+    def __init__(self, message: str = "", *, why: str | None = None, fix: str | None = None):
+        super().__init__(message)
+        self.why, self.fix = why or self.default_why, fix or self.default_fix
+
+
+class SelfApproval(GuardError):
+    default_why = "The requester and the approver are the same identity, which is not allowed."
+    default_fix = "Ask a different person to approve, or pass a different --approver."
+
+
+class Expired(GuardError):
+    default_why = "Approvals expire 30 minutes after they are requested."
+    default_fix = "Re-run the original command to create a fresh approval request."
+
+
+class BadToken(GuardError):
+    default_why = "The approval token or one-time code does not match."
+    default_fix = "Re-enter the current code, or have the approver use the approval secret."
+
+
+class Tampered(GuardError):
+    default_why = "The approvals store failed its signature check, so it was modified or FCCTL_KEY changed."
+    default_fix = "Restore the original FCCTL_KEY; if it was edited by hand, move approvals.json aside and re-request."
+
+
+class NotPending(GuardError):
+    default_why = "That approval is not pending; it was already executed, denied or expired."
+    default_fix = "Check its state with `fcctl approval list`; re-run the command for a new approval."
 
 
 @dataclass
@@ -95,7 +122,8 @@ class Guard:
         private_dir(self.home)
         self.key = (key or os.environ.get("FCCTL_KEY") or "").encode()
         if not self.key:
-            raise GuardError("FCCTL_KEY is not set (needed to sign the approvals store)")
+            raise GuardError("FCCTL_KEY is not set", why="the approvals store is HMAC-signed with FCCTL_KEY",
+                             fix=f"Generate a key with: {KEY_CMD}  then export FCCTL_KEY=<that value>")
         self.secret = secret if secret is not None else os.environ.get("FCCTL_APPROVAL_SECRET", "")
         self.alerter, self.now = alerter, now
         self.user = user or os.environ.get("FCCTL_USER") or getpass.getuser()
