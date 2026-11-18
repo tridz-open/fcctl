@@ -1,5 +1,7 @@
 # fcctl
 
+Part of **Frappe SaaS**. Docs: https://tridz-open.github.io/frappe-saaskit/
+
 > [!WARNING]
 > **ALPHA SOFTWARE. Bleeding edge. Read before you use it.**
 >
@@ -434,7 +436,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). Endpoin
 
 ## Related repositories
 
-- [tridz-open/frappe-saaskit-sdk](https://github.com/tridz-open/frappe-saaskit-sdk): `@frappe-saaskit` TypeScript SDK (client, React, Vue, Node, mock) for apps that talk to a `saas_core` backend.
+- [tridz-open/saas_core `sdk/`](https://github.com/tridz-open/saas_core/tree/main/sdk): `@frappe-saaskit` TypeScript SDK (client, React, Vue, Node, mock) for apps that talk to a `saas_core` backend, released with saas_core.
 - [tridz-open/saas_core](https://github.com/tridz-open/saas_core): the public Frappe app that uses fcctl to provision customer sites; it pins a fcctl release.
 - [tridz-open/frappe-saaskit-starter](https://github.com/tridz-open/frappe-saaskit-starter): React + Vite SaaS starter for Frappe (`saas_core`).
 
