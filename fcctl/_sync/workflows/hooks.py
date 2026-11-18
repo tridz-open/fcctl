@@ -5,8 +5,6 @@ from __future__ import annotations
 
 from ..pilot import seg
 
-import base64
-import os
 from typing import Any, Callable
 
 import inspect
@@ -72,8 +70,9 @@ def set_config(ctx, config: dict | None = None, **kw):
 
 
 def set_host_name(ctx, host_name: str | None = None):
-    """Sets `host_name` in site config (what `bench set-config host_name` does); defaults to https://<site>."""
-    _patch_config(ctx, {"host_name": host_name or f"https://{ctx.site}"})
+    """Protected on Frappe Cloud Pilot (422 protected_configuration); kept registered so old templates fail fast."""
+    raise UsageError("Pilot manages host_name; remove core.set_host_name from the template",
+                     fix="drop the core.set_host_name hook from the template")
 
 
 def clear_cache(ctx):
@@ -109,14 +108,9 @@ def login_link(ctx, hint: str | None = None):
 
 
 def set_fresh_encryption_key(ctx, confirm_no_encrypted_values: bool = False):
-    """EXPERIMENTAL. Precondition: the restored backup holds ZERO encrypted values (no __Auth password
-    rows, no encrypted Password fields); it cannot re-encrypt existing data and would orphan any.
-    The caller must assert this with confirm_no_encrypted_values=True. Automatic verification is only
-    possible if Pilot /database/queries can run a read-only count (week-1 spike); not done here."""
-    if not confirm_no_encrypted_values:
-        raise UsageError("core.set_fresh_encryption_key is EXPERIMENTAL and only valid when the source backup "
-                         "has zero encrypted values; pass confirm_no_encrypted_values=True to assert that")
-    _patch_config(ctx, {"encryption_key": base64.urlsafe_b64encode(os.urandom(32)).decode()})
+    """Protected on Frappe Cloud Pilot (422 protected_configuration); kept registered so old templates fail fast."""
+    raise UsageError("Pilot manages encryption_key; remove core.set_fresh_encryption_key from the template",
+                     fix="drop the core.set_fresh_encryption_key hook from the template")
 
 
 BUILTINS: dict[str, Hook] = {

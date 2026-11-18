@@ -22,7 +22,7 @@ from .types import (AppSource, BackupSource, HookRef, ManifestMismatch, ResumeRe
                     StepContext, TemplateManifest, UploadedBackup, parse_age)
 
 STEPS = ["preflight", "server", "bench_apps", "create_site", "isolate", "restore", "reisolate",
-         "hooks", "config", "health"]
+         "hooks", "config", "release", "health"]
 LATE = set(STEPS[4:])  # failure here -> needs_attention
 OWNED_WINDOW = 3600.0
 MIN_VCPU = 1.0  # default refuses 0.5 vCPU plans (Starter hang incident)
@@ -139,7 +139,9 @@ class ProvisionRun:
                  hook_resolver=None, manifest=None, admin=None, eff=None, source_eff=None, health_checks=None,
                  min_vcpu=MIN_VCPU, allow_existing_sites=False, allow_hook_upgrade=False,
                  pilot_factory=None, server=None, bench_apps=(), site_apps=(), from_backup=None,
-                 post_restore_hooks=(), config=None, needs_site_admin=False, admin_factory=None):
+                 post_restore_hooks=(), config=None, needs_site_admin=False, admin_factory=None,
+                 keep_isolated=False):
+        self.keep_isolated = bool(keep_isolated)
         self.needs_site_admin, self.admin_factory = needs_site_admin, admin_factory
         self.workflow_id, self.site, self.journal = workflow_id, site, journal
         self.pilot, self.central = pilot, central
@@ -474,6 +476,16 @@ class ProvisionRun:
             (settle(self.api.patch_config(self.site, self.config)))
         return {"keys": sorted(self.config)}
 
+    def _s_release(self):
+        """Lift the isolation applied by isolate/reisolate (maintenance off, scheduler resumed). Idempotent."""
+        if self.keep_isolated:
+            return {"skipped": True, "kept_isolated": True}
+        cfg = (settle(self.api.site_config(self.site))) or {}
+        lift = {k: 0 for k in ("maintenance_mode", "pause_scheduler") if int(cfg.get(k, 0) or 0) != 0}
+        if lift:
+            (settle(self.api.patch_config(self.site, lift)))
+        return {"released": sorted(lift)}
+
     def _s_health(self):
         checks = self.health_checks or [lambda api, site: api.health(site)]
         res = []
@@ -490,7 +502,8 @@ def provision_site(*, pilot, journal, site, server=None, central=None, bench_app
                    from_backup=None, manifest=None, hook_resolver=None, post_restore_hooks=(), config=None,
                    health_checks=None, workflow_id=None, api=None, admin=None, eff=None, source_eff=None,
                    min_vcpu=MIN_VCPU, allow_existing_sites=False, allow_hook_upgrade=False,
-                   pilot_factory=None, needs_site_admin=False, admin_factory=None) -> ProvisionRun:
+                   pilot_factory=None, needs_site_admin=False, admin_factory=None,
+                   keep_isolated=False) -> ProvisionRun:
     """Create (or resume, when workflow_id already exists in the journal) a run. Call .wait() to execute."""
     return ProvisionRun(
         workflow_id=workflow_id or "wf-" + uuid.uuid4().hex[:10], site=site, journal=journal, pilot=pilot,
@@ -499,4 +512,4 @@ def provision_site(*, pilot, journal, site, server=None, central=None, bench_app
         allow_existing_sites=allow_existing_sites, allow_hook_upgrade=allow_hook_upgrade,
         pilot_factory=pilot_factory, server=server, bench_apps=bench_apps, site_apps=site_apps,
         from_backup=from_backup, post_restore_hooks=post_restore_hooks, config=config,
-        needs_site_admin=needs_site_admin, admin_factory=admin_factory)
+        needs_site_admin=needs_site_admin, admin_factory=admin_factory, keep_isolated=keep_isolated)

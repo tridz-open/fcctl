@@ -78,7 +78,7 @@ def test_happy_path_order_and_result(jr):
     out = r.wait()
     assert out["site"] == "a.example.com" and out["workflow_id"] == "wf1" and "preflight" in out["timings"]
     assert [c for c in api.calls if c[0] == "add_app"] == [("add_app", {"repo": "https://g/x/myapp.git", "branch": "b"})]
-    assert api.cfg.get("maintenance_mode") == 1 and api.cfg.get("pause_scheduler") == 1  # re-applied after restore
+    assert api.cfg.get("maintenance_mode") == 0 and api.cfg.get("pause_scheduler") == 0  # released after hooks
     assert api.cfg["k"] == 1 and api.cfg["fcctl_workflow_id"] == "wf1"
     assert jr.get("wf1")["state"] == SUCCEEDED
     assert r.to_dict()["state"] == SUCCEEDED
@@ -225,16 +225,11 @@ def test_builtin_hooks():
     ctx = StepContext("s.com", p, wait_task=waited.append)
     r = builtin_resolver()
     r.resolve("core.set_config@1")(ctx, config={"a": 1})
-    r.resolve(HookRef("core.set_host_name"))(ctx, host_name="h.com")
     r.resolve("core.scheduler_pause@1")(ctx)
     r.resolve("core.maintenance_off@1")(ctx)
     r.resolve("core.migrate@1")(ctx); r.resolve("core.clear_cache@1")(ctx)
     assert p.c[0] == ("patch", "/sites/s.com/configuration", {"a": 1})
-    assert p.c[1][2] == {"host_name": "h.com"} and waited == ["t", "t"]
-    with pytest.raises(UsageError):
-        r.resolve("core.set_fresh_encryption_key@1")(ctx)
-    r.resolve("core.set_fresh_encryption_key@1")(ctx, confirm_no_encrypted_values=True)
-    assert "encryption_key" in p.c[-1][2]
+    assert waited == ["t", "t"]
     with pytest.raises(UsageError):
         r.resolve("nope@1")
 
@@ -299,11 +294,56 @@ def test_live_api_site_config_reads_configuration_endpoint():
     assert P.path == "/sites/a.example.com/configuration" and cfg["maintenance_mode"] == 1
 
 
-def test_set_host_name_defaults_to_site_url():
-    """Templates call core.set_host_name with no args; it must default to https://<site>."""
+def test_set_host_name_is_protected_on_pilot():
     class P:
         def __init__(self): self.c = []
         def patch(self, path, body): self.c.append(body)
     p = P()
-    builtin_resolver().resolve("core.set_host_name@1")(StepContext("s.com", p, wait_task=lambda t: None))
-    assert p.c == [{"host_name": "https://s.com"}]
+    with pytest.raises(UsageError, match="Pilot manages host_name; remove core.set_host_name"):
+        builtin_resolver().resolve("core.set_host_name@1")(StepContext("s.com", p, wait_task=lambda t: None))
+    assert p.c == []
+
+
+@pytest.mark.parametrize("kw", [{}, {"confirm_no_encrypted_values": True}])
+def test_set_fresh_encryption_key_is_protected_on_pilot(kw):
+    class P:
+        def __init__(self): self.c = []
+        def patch(self, path, body): self.c.append(body)
+    p = P()
+    with pytest.raises(UsageError, match="Pilot manages encryption_key"):
+        builtin_resolver().resolve("core.set_fresh_encryption_key@1")(StepContext("s.com", p), **kw)
+    assert p.c == []
+
+
+def test_release_lifts_isolation_by_default_and_is_idempotent(jr):
+    api = FakeApi()
+    out = run(jr, api).wait()
+    assert api.cfg["maintenance_mode"] == 0 and api.cfg["pause_scheduler"] == 0
+    assert jr.get("wf1")["wf"]["steps"]["release"]["done"] and "release" in out["timings"]
+    # template already lifted it: release is a no-op (no extra patch)
+    api2 = FakeApi()
+    res = HookResolver({"x.up@1": lambda ctx: api2.patch_config("a.example.com", {"maintenance_mode": 0, "pause_scheduler": 0})})
+    run(jr, api2, workflow_id="w2", post_restore_hooks=[HookRef("x.up", 1)], hook_resolver=res).wait()
+    patches = [c for c in api2.calls if c[0] == "patch"]
+    assert patches[-1][1] == {"maintenance_mode": 0, "pause_scheduler": 0} and jr.get("w2")["wf"]["steps"]["release"]["result"] == {"released": []}
+
+
+def test_keep_isolated_skips_release(jr):
+    api = FakeApi()
+    run(jr, api, keep_isolated=True).wait()
+    assert api.cfg["maintenance_mode"] == 1 and api.cfg["pause_scheduler"] == 1
+    assert jr.get("wf1")["wf"]["steps"]["release"]["result"]["skipped"] is True
+
+
+def test_resume_from_old_journal_without_release_step(jr):
+    api = FakeApi(); api.healthy = False
+    with pytest.raises(FcError, match="health"):
+        run(jr, api).wait()
+    e = jr.get("wf1")
+    e["wf"]["steps"].pop("release"); jr._write(e)  # pre-release journal
+    api.cfg.update(maintenance_mode=1, pause_scheduler=1); api.healthy = True
+    run(jr, api).wait()
+    assert jr.get("wf1")["state"] == SUCCEEDED and api.cfg["maintenance_mode"] == 0
+    d = run(jr, api).to_dict()
+    assert "keep_isolated" not in d["recipe"]  # runtime option, not part of the journaled recipe
+    assert type(run(jr, api)).from_dict(d, journal=jr, pilot=StubPilot(), api=api, keep_isolated=True).keep_isolated
