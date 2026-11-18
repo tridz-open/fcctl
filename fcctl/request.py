@@ -12,6 +12,7 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 
 from . import retry as _retry
+from .redact import redact
 from .session_store import SessionStore
 
 CENTRAL_BASE = "https://dashboard.frappe.io"
@@ -124,7 +125,7 @@ class DryRunRecorder:
             return False
         if len(reqs) >= cls.MAX:
             raise RuntimeError("dry-run: too many requests recorded")
-        reqs.append({"method": method.upper(), "path": path, "params": params, "body": body})
+        reqs.append(redact({"method": method.upper(), "path": path, "params": params, "body": body}))
         return True
 
 

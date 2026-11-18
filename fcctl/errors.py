@@ -1,8 +1,9 @@
 """Typed errors with what/why/fix, stable exit codes, redaction and 3-line formatting."""
 from __future__ import annotations
 
-import re
 from typing import Any
+
+from .redact import redact as _redact_any, redact_text
 
 
 GENERIC_FIX = "Retry with --debug, or run `fcctl doctor`."
@@ -18,11 +19,12 @@ class FcError(Exception):
                  what: str | None = None, why: str | None = None, fix: str | None = None,
                  request_id: str | None = None, cf_ray: str | None = None, code: str | None = None,
                  op: str | None = None, profile: str | None = None):
+        message = redact_text(message)
         super().__init__(message)
-        self.status, self.body = status, body
-        self.what = what
-        self.why = why or self.default_why
-        self.fix = fix or self.default_fix
+        self.status, self.body = status, _redact_any(body)
+        self.what = redact_text(what) if what else what
+        self.why = redact_text(why or self.default_why)
+        self.fix = redact_text(fix or self.default_fix)
         self.request_id, self.cf_ray, self.code = request_id, cf_ray, code
         self.op, self.profile = op, profile
 
@@ -158,19 +160,8 @@ class DiskShrinkRefused(FcError):
     default_fix = 'Request a size at or above the current disk size.'
 
 
-_REDACTIONS = [
-    (re.compile(r"(?i)\bsid=[^;\s&\"',]+"), "sid=***"),
-    (re.compile(r"(?i)\bBearer\s+[A-Za-z0-9._~+/=-]+"), "Bearer ***"),
-    (re.compile(r"(?i)(x-frappe-csrf-token|csrf[_-]?token)([\"']?\s*[:=]\s*[\"']?)[^\s\"',;&}]+"),
-     r"\1\2***"),
-]
-
-
 def redact(text: Any) -> str:
-    s = str(text)
-    for rx, rep in _REDACTIONS:
-        s = rx.sub(rep, s)
-    return s
+    return redact_text(str(text))
 
 
 def format_error(e: BaseException) -> str:

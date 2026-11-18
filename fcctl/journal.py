@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 
 from ._fs import open_private, private_dir
+from .redact import redact
 
 PENDING, DISPATCHING, SUBMITTED, RUNNING = "pending", "dispatching", "submitted", "running"
 SUCCEEDED, FAILED, UNKNOWN, STUCK, NEEDS_ATTENTION = (
@@ -69,6 +70,7 @@ class Journal:
         return self.dir / f"{jid}.json"
 
     def _write(self, e: dict):
+        e = redact(e)
         p = self._path(e["id"])
         tmp = p.with_suffix(".tmp")
         with open_private(tmp, "w") as f:

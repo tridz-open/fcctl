@@ -80,7 +80,8 @@ def _fail(exc: BaseException, debug: bool) -> int:
         return 130
     print(format_error(exc), file=sys.stderr)
     if debug:
-        traceback.print_exception(type(exc), exc, exc.__traceback__, file=sys.stderr)
+        from ..redact import redact_text
+        sys.stderr.write(redact_text("".join(traceback.format_exception(type(exc), exc, exc.__traceback__))))
     return exit_code_for(exc)
 
 
@@ -105,6 +106,9 @@ def main(argv: list[str] | None = None) -> int:
         from .. import retry
         retry.set_default(retry.from_env().with_max_retries(args.max_retries))
     from .context import Ctx
+    if args.debug:
+        from ..redact import install_debug_logging
+        install_debug_logging()
     ctx = Ctx(args, parser=parser)
     try:
         data = func(ctx, args)
@@ -116,9 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         from ..session_store import SessionStoreError
         if isinstance(e, (FcError, GuardError, SessionStoreError, KeyboardInterrupt)):
             return _fail(e, args.debug)
-        if args.debug:
-            raise
-        return _fail(e, False)
+        return _fail(e, bool(args.debug))
     finally:
         ctx.close()
     if isinstance(data, int) and not isinstance(data, bool):

@@ -4,29 +4,15 @@ from __future__ import annotations
 import fcntl
 import hashlib
 import json
-import re
 import time
 from pathlib import Path
 from typing import Callable, Protocol
 
 from ._fs import open_private, private_dir
+from .redact import REDACTED, SECRET_KEY_RE, redact  # noqa: F401
 
 FIELDS = ("actor", "agent", "profile", "login", "team", "op", "target", "approval_id", "workflow_id",
           "request_id", "cf_ray", "task_id", "outcome")
-SECRET_KEY_RE = re.compile(r"secret|token|password|passwd|api_key|apikey|authorization|cookie|csrf|sid$|totp",
-                           re.I)
-SECRET_VAL_RE = re.compile(r"(?i)((?:secret|token|password|api_key|sid|csrf)\s*[=:]\s*)[^\s&,;\"']+")
-REDACTED = "[REDACTED]"
-
-
-def redact(v):
-    if isinstance(v, dict):
-        return {k: (REDACTED if SECRET_KEY_RE.search(str(k)) else redact(x)) for k, x in v.items()}
-    if isinstance(v, (list, tuple)):
-        return [redact(x) for x in v]
-    if isinstance(v, str):
-        return SECRET_VAL_RE.sub(lambda m: m.group(1) + REDACTED, v)
-    return v
 
 
 def _canon(row: dict) -> str:
