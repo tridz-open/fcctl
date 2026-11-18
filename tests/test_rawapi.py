@@ -89,3 +89,45 @@ def test_dry_run(tmp_path):
     c, f = mk(tmp_path, dry_run=True)
     plan = call_raw(c, "pilot", "POST", "/sites", {}, confirm=True)
     assert plan["dry_run"] and not f.calls
+
+
+# F1: GETs used to bypass policy entirely
+@pytest.mark.parametrize("plane,path", [("central", "press.api.site.archive"),
+                                        ("central", "/api/method/press.api.site.archive"),
+                                        ("pilot", "/sites/x/drop"), ("pilot", "/sites/x/restore")])
+def test_risky_get_denied_read_only_and_protected(tmp_path, plane, path):
+    for policy in ("read_only", "protected"):
+        c, f = mk(tmp_path / policy, policy)
+        with pytest.raises((PolicyDenied, ApprovalPending)):
+            call_raw(c, plane, "GET", path)
+        assert not f.calls
+
+
+@pytest.mark.parametrize("plane,path", [("central", "press.api.site.archive"), ("pilot", "/sites/x/archive")])
+def test_risky_get_needs_approval_guarded(tmp_path, plane, path):
+    c, f = mk(tmp_path)
+    with pytest.raises(ApprovalPending):
+        call_raw(c, plane, "GET", path, confirm=True)
+    assert not f.calls
+
+
+def test_read_only_denies_risky_get_outright(tmp_path):
+    c, f = mk(tmp_path, "read_only")
+    with pytest.raises(PolicyDenied):
+        call_raw(c, "central", "GET", "press.api.site.archive")
+    assert not f.calls and c.audit.list()[-1]["outcome"] == "denied"
+
+
+@pytest.mark.parametrize("policy", ["read_only", "guarded", "protected", "full"])
+def test_plain_safe_get_still_allowed(tmp_path, policy):
+    c, f = mk(tmp_path, policy)
+    assert call_raw(c, "pilot", "GET", "/api/method/ping") == {"ok": True}
+    assert call_raw(c, "central", "GET", "server.list") == {"ok": True}
+    assert len(f.calls) == 2
+
+
+def test_guarded_flag_applies_to_get(tmp_path):
+    c, f = mk(tmp_path, "full")
+    with pytest.raises(ApprovalPending):
+        call_raw(c, "pilot", "GET", "/sites", guarded=True)
+    assert not f.calls

@@ -42,7 +42,8 @@ def test_yes_and_confirm_do_not_bypass(env, fake, capsys):
 def test_get_passes_and_full_passes(env, fake, capsys):
     mkprofile(capsys, policy="guarded")
     _seed(env, fake)
-    assert run(capsys, "api", "central", "GET", "central.api.identity.my_profile")[0] == 0
+    # an unregistered Central GET is an unclassified write (Frappe methods accept GET): needs approval
+    assert run(capsys, "api", "central", "GET", "central.api.identity.my_profile")[0] == 7
     run(capsys, "profile", "set", "main", "--policy", "full")
     assert run(capsys, *OPS, "--data", "{}")[0] == 0
     assert _posts(fake)

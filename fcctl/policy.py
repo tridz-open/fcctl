@@ -155,8 +155,27 @@ def classify_raw(method: str, path: str) -> dict[str, Any] | None:
     return None
 
 
-def check(op: str | tuple[str, str], eff: EffectivePolicy, registry: dict[str, dict[str, Any]] | None = None) -> Decision:
-    """op: registry op id (str) or raw (method, path)."""
+RISKY_GET_RE = re.compile(r"drop|delete|restore|archive", re.I)
+_METHOD_PREFIX = "/api/method/"
+
+
+def raw_get_is_risky(plane: str | None, path: str) -> bool:
+    """An unclassified read-method raw call that must be treated as a write.
+
+    Frappe whitelisted methods accept GET, so on Central any `/api/method/<x>` (or bare dotted
+    method) is a write unless `<x>` is a registered read op. On Pilot, paths naming a destructive
+    verb (drop, delete, restore, archive) are write-like.
+    """
+    if plane == "central":
+        name = path[len(_METHOD_PREFIX):] if path.startswith(_METHOD_PREFIX) else path
+        meta = REGISTRY.get(name)
+        return not (meta and meta["kind"] == "read")
+    return bool(RISKY_GET_RE.search(path))
+
+
+def check(op: str | tuple[str, str], eff: EffectivePolicy, registry: dict[str, dict[str, Any]] | None = None,
+          plane: str | None = None) -> Decision:
+    """op: registry op id (str) or raw (method, path). `plane` refines unclassified read-method calls."""
     reg = REGISTRY if registry is None else registry
     raw = False
     op_id = None
@@ -174,6 +193,10 @@ def check(op: str | tuple[str, str], eff: EffectivePolicy, registry: dict[str, d
         else:
             kind = None  # unclassified
     pol = eff.policy
+    if kind is None and method in READ_METHODS and plane is not None:
+        if not raw_get_is_risky(plane, path):
+            return Allow()  # plain safe read
+        method = "POST"  # risky read-method call: treat as an unclassified write
     if kind is None:  # unclassified raw
         if pol == "read_only" or (pol == "protected" and method in READ_METHODS):
             return Deny(f"unclassified raw operation {method} {path} rejected under {pol}")
