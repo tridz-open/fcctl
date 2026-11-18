@@ -76,7 +76,7 @@ def register(sub, common):
     x.set_defaults(func=b_download)
     x = g.add_parser("offsite", parents=[common], help="list offsite backups"); x.add_argument("site")
     x.set_defaults(func=b_offsite)
-    x = g.add_parser("restore", parents=[common], help="restore a backup over a site (guarded)")
+    x = g.add_parser("restore", parents=[common], help="[experimental] full restore of a backup over a site (guarded; not live-tested)")
     x.add_argument("site"); x.add_argument("timestamp"); x.add_argument("--parts", nargs="*")
     x.add_argument("--skip-failing-patches", action="store_true")
     x.add_argument("--workflow-id", help="exempt from approval only if this workflow created the site")

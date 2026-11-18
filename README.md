@@ -143,10 +143,10 @@ fcctl doctor                           # key, config, profile and session
 # Fetch and install in one step, the same call the dashboard makes.
 fcctl app add india_compliance --site shop.example.com -s server-xxxx
 
-# Add to the bench only (no site); runs the bench validator.
+# [experimental] Add to the bench only (no site); runs the bench validator. Not live-tested.
 fcctl app add hrms -s server-xxxx
 
-# A private or forked app from GitHub, on a specific branch.
+# [experimental] A private or forked app from GitHub, on a specific branch. Not live-tested.
 fcctl app add --repo https://github.com/you/your_app --branch main -s server-xxxx
 ```
 
@@ -310,7 +310,23 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). Endpoin
 - The API has no in-place snapshot restore.
 - No MCP server yet.
 - Live-verified on Frappe Cloud (Pilot): site create, rename, drop (through the approval gate), app install / `app add --site`, config, logs, backup create/list/schedule, cross-site backup upload, task output, and the full provision workflow from a golden backup (hooks, release, health).
-- Not yet live-tested: bench-only `app add`, `app add --repo`, `app check-updates`, `app remove`, a full `backup restore`, and all server, snapshot, bucket and billing (Central) writes. Treat these as experimental.
+- Not yet live-tested: see [Experimental commands](#experimental-commands). Their `--help` text starts with `[experimental]`.
+
+## Experimental commands
+
+These are implemented and covered by offline tests (respx and the in-process fake), but have not been run against the live Frappe Cloud API. Request bodies and response shapes may be wrong. Try them on throwaway resources first. Each is tagged `[experimental]` in `--help`.
+
+| Command | Why experimental |
+|---|---|
+| `app add NAME -s SERVER` (bench-only, no `--site`) | not live-tested; the bench validator can reject it |
+| `app add --repo URL` | name resolution is contract-tested only |
+| `app check-updates` | not live-tested |
+| `app remove` | not live-tested |
+| `backup restore` (full restore) | not live-tested; the approval gate stopped the live attempt |
+| `server create / start / stop / restart / resize / protect / terminate` | Central writes, not live-tested |
+| `snapshot take / delete` | Central writes, not live-tested |
+| `bucket create / quota / delete / put` | Central writes, not live-tested |
+| `billing health` | computed from field names that are not live-verified (billing has no write commands) |
 
 ## License
 

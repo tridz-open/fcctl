@@ -43,6 +43,6 @@ def register(sub, common):
     x.add_argument("name", nargs="?", help="invoice name (omit to list)")
     x.set_defaults(func=invoices)
     gs.add_parser("usage", parents=[common], help="forecast, cycle costs, next payment").set_defaults(func=usage)
-    x = gs.add_parser("health", parents=[common], help="exit 1 when billing is not healthy")
+    x = gs.add_parser("health", parents=[common], help="[experimental] exit 1 when billing is not healthy (field names not live-verified)")
     x.add_argument("--min-balance", type=float, default=0.0)
     x.set_defaults(func=health)
