@@ -2,6 +2,29 @@
 
 The sync twin is generated. Everything is async-native (fcctl._async.backups / workflows) over the
 client's own central/pilot clients; no thread shims.
+
+Guard model (library users)
+---------------------------
+Destructive facade methods are guarded BY DEFAULT, matching the CLI policy registry (fcctl.policy.REGISTRY:
+kind "destructive" -> two-person approval). Calling one does not execute it: it files and returns a
+`fcctl.guard.PendingApproval`; an approver must approve it, and approving executes the raw op.
+
+  * `Sites.drop`      (site.drop, destructive)      guarded
+  * `Backups.restore` (backup.restore, destructive) guarded
+
+Two explicit ways past the guard:
+  * `owned_by_workflow=<workflow_id>`: ownership check (the journal must show that workflow created the
+    site); passing proceeds unguarded, failing raises PolicyDenied. For workflow-owned sites only.
+  * `unsafe=True`: perform the raw operation with NO guard and NO ownership check. An audit entry
+    (outcome "unsafe", extra unsafe=True) is appended to the hash-chained audit log first, and the call
+    fails closed if that entry cannot be written. Use only from trusted code.
+
+Left unguarded: read/write ops, `Servers.resize` (registry kind "cost": the CLI asks for --confirm, which
+has no library equivalent; it already refuses disk shrink) and `Workflows.provision_site` (creates, and only
+restores onto a site the workflow itself creates).
+
+The guard is enforced at THIS facade only. Direct low-level calls such as `client.pilot(server).post(...)`
+or `client.central.call(...)` bypass it by design (they are the raw transport).
 """
 from __future__ import annotations
 
@@ -31,6 +54,14 @@ def _disk(d) -> float | None:
 def _journal():
     from ..journal import Journal
     return Journal(Path(os.environ.get("FCCTL_HOME") or Path.home() / ".fcctl") / "journal")
+
+
+def _audit_unsafe(op, target):
+    """Append a hash-chained audit row for an `unsafe=True` facade call (fails closed if it cannot be written)."""
+    from .. import config
+    from ..audit import AuditLog
+    AuditLog(config.home() / "audit" / "audit.jsonl").append(
+        actor="library", op=op, target=str(target), outcome="unsafe", unsafe=True)
 
 
 def _check_owned(workflow_id, site, journal, policy, what):
@@ -69,10 +100,15 @@ class Sites:
         return await self._c.pilot(server).post(f"/sites/{seg(site)}/login")
 
     async def drop(self, server: str, site: str, owned_by_workflow: str | None = None, journal=None,
-                   policy: str = "guarded", no_backup: bool = False):
+                   policy: str = "guarded", no_backup: bool = False, unsafe: bool = False):
         """DESTRUCTIVE. Guarded (PendingApproval) unless owned_by_workflow passes the ownership check
-        (journal shows that workflow created `site`); a non-passing owned_by_workflow raises PolicyDenied."""
+        (journal shows that workflow created `site`); a non-passing owned_by_workflow raises PolicyDenied.
+        unsafe=True skips the guard and ownership check (audited)."""
         p = self._c.pilot(server)
+        if unsafe:
+            _audit_unsafe("site.drop", site)
+            from . import sites
+            return await sites.drop_site(p, site, no_backup=no_backup)
         if owned_by_workflow:
             _check_owned(owned_by_workflow, site, journal, policy, "drop")
             from . import sites
@@ -112,16 +148,21 @@ class Backups:
 
     async def restore(self, server: str, site: str, from_upload=None, from_site_backup=None,
                       owned_by_workflow: str | None = None, journal=None, policy: str = "guarded",
-                      skip_failing_patches: bool = False):
+                      skip_failing_patches: bool = False, unsafe: bool = False):
         """Overwrites `site`. Guarded (returns PendingApproval) unless owned_by_workflow passes D11
         (journal shows that workflow created `site`); a non-passing owned_by_workflow raises PolicyDenied.
+
+        unsafe=True skips the guard and ownership check (audited).
 
         from_upload: upload_id str or {"upload_id", "parts"}; from_site_backup: {"server","site","ts"[,"parts"]}.
         """
         if bool(from_upload) == bool(from_site_backup):
             raise UsageError("pass exactly one of from_upload / from_site_backup")
         p = self._c.pilot(server)
-        if owned_by_workflow:
+        if unsafe:
+            _audit_unsafe("backup.restore", site)
+            owned_by_workflow = owned_by_workflow or "unsafe"
+        elif owned_by_workflow:
             _check_owned(owned_by_workflow, site, journal, policy, "restore")
         if from_upload:
             u = {"upload_id": from_upload} if isinstance(from_upload, str) else dict(from_upload)
