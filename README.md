@@ -248,7 +248,7 @@ Reads (GET/HEAD/OPTIONS) run directly. Under the `guarded` and `protected` polic
 
 **Dry run.** `--dry-run` on any write prints the decision and the HTTP requests it would send (method, path, body with secrets redacted), and sends nothing.
 
-**Retries.** Idempotent requests (GET, HEAD, OPTIONS) are retried on 429, 5xx and network errors with exponential backoff and jitter, honouring `Retry-After`. The default is 3 retries; set `--max-retries N` or `FCCTL_MAX_RETRIES=N` (0 disables). Writes are never retried automatically: an interrupted write is settled by `fcctl reconcile`.
+**Retries.** Idempotent requests (GET, HEAD, OPTIONS, and writes that carry an idempotency key, which includes every Pilot POST) are retried on 429, 5xx and network errors with exponential backoff and jitter, honouring `Retry-After` (waits are capped at 30 seconds). The default is 3 retries; set `--max-retries N` or `FCCTL_MAX_RETRIES=N` (0 disables). Writes without an idempotency key (for example Central POSTs) are never retried automatically: an interrupted write is settled by `fcctl reconcile`.
 
 **Shell completion** (bash, zsh, fish):
 
