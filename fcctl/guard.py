@@ -356,6 +356,13 @@ def set_default_guard(g: Guard | None):
     _default = g
 
 
+def _recording() -> bool:
+    """True under --dry-run request capture: the raw op runs, but DryRunRecorder swallows every non-GET request,
+    so nothing is sent and no approval is filed."""
+    from .request import DryRunRecorder
+    return DryRunRecorder.active()
+
+
 def guarded(op: str, target, kind: str = "central"):
     """Decorate `fn(client, *args)`. The wrapper files a PendingApproval; `wrapper._unsafe` is the
     raw implementation, used only by Guard.approve. `target(**bound_args)` names the victim."""
@@ -377,10 +384,14 @@ def guarded(op: str, target, kind: str = "central"):
         if is_async:
             @functools.wraps(fn)
             async def wrapper(client, *a, **k):
+                if _recording():
+                    return await fn(client, *a, **k)
                 return _file(client, a, k)
         else:
             @functools.wraps(fn)
             def wrapper(client, *a, **k):
+                if _recording():
+                    return fn(client, *a, **k)
                 return _file(client, a, k)
         wrapper._unsafe = fn
         wrapper.guard_op = op

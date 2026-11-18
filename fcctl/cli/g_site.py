@@ -83,6 +83,17 @@ def s_provision(ctx, args):
     if args.workflow_id and not args.dry_run:  # resume: the journal already holds the recipe; do not create a new write op
         res = fn()
         return {"workflow_id": args.workflow_id, **res} if isinstance(res, dict) else res
+    if args.dry_run:
+        # Never construct a ProvisionRun (it writes the journal). Show the first deterministic write only.
+        from .. import sites
+
+        def fn():  # noqa: F811
+            return sites.create_site(p, args.site, args.app or [])
+        plan = ops.run_op("site.create", args.site, fn, ctx=oc)
+        if isinstance(plan, dict) and plan.get("dry_run"):
+            plan["note"] = ("provision is a multi-step workflow; only the first deterministic write is shown. "
+                            "Later steps (bench apps, restore, hooks, config) depend on responses from earlier ones.")
+        return plan
     return ops.run_op("site.create", args.site, fn, ctx=oc)
 
 
