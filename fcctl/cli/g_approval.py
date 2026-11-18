@@ -21,8 +21,16 @@ def _token(ctx, args):
     return tok
 
 
+def _display(rec):
+    """Redacted copy for display; the stored record stays raw (replay needs the real args)."""
+    from ..redact import redact
+    d = dataclasses.asdict(rec)
+    d["args"] = redact(d.get("args"))
+    return d
+
+
 def list_(ctx, args):
-    return [dataclasses.asdict(r) for r in ctx.guard.list_pending()]
+    return [_display(r) for r in ctx.guard.list_pending()]
 
 
 def show(ctx, args):
@@ -30,7 +38,7 @@ def show(ctx, args):
     rec = ctx.guard._load().get(args.id)
     if rec is None:
         raise NotPending(f"no such approval {args.id}")
-    return dataclasses.asdict(rec)
+    return _display(rec)
 
 
 def approve(ctx, args):

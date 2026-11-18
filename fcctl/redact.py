@@ -18,8 +18,8 @@ ENV_SECRETS = ("FCCTL_KEY", "FCCTL_APPROVER_KEY", "FCCTL_APPROVER_PRIVATE_KEY", 
 # dict keys whose whole value is masked
 SECRET_KEY_RE = re.compile(
     r"^key$"                                                   # a bare `key`
-    r"|^(?:secret|password|passwd|api_?key|authorization|cookie|csrf|totp|otp|sid)"      # leading word
-    r"|(?:^|[_.-])(?:secret|token|password|passwd|api_?key|private_key|encryption_key|"
+    r"|^(?:secret|password|passwd|api_?key|access_?key|ssh_?key|authorization|cookie|csrf|totp|otp|sid)"      # leading word
+    r"|(?:^|[_.-])(?:secret|token|password|passwd|api_?key|access_?key|ssh_?key|private_key|encryption_key|"
     r"authorization|cookie|csrf|totp|otp|sid)s?$",              # trailing word (token_count does not match)
     re.I)
 
