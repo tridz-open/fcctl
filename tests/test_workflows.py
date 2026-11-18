@@ -276,3 +276,13 @@ def test_running_tasks_includes_queued():
     r = asyncio.run(LiveApi(p).running_tasks())
     assert [t["id"] for t in r] == ["a", "b"]
     assert p.calls == [("/tasks", {})]
+
+
+def test_plain_dict_hooks_are_accepted(jr):
+    """Stored templates pass hooks as {name, version, args} dicts; they used to crash to_dict() at start."""
+    api = FakeApi()
+    calls = []
+    res = HookResolver().register("core.clear_cache", 1, lambda ctx: calls.append(1))
+    r = run(jr, api, post_restore_hooks=[{"name": "core.clear_cache", "version": 1, "args": {}}], hook_resolver=res)
+    r.wait()
+    assert calls == [1]
