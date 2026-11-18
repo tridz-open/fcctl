@@ -347,3 +347,18 @@ def test_resume_from_old_journal_without_release_step(jr):
     d = run(jr, api).to_dict()
     assert "keep_isolated" not in d["recipe"]  # runtime option, not part of the journaled recipe
     assert type(run(jr, api)).from_dict(d, journal=jr, pilot=StubPilot(), api=api, keep_isolated=True).keep_isolated
+
+
+def test_resume_with_secret_in_recipe_config(jr):
+    api = FakeApi(); api.fail_restore = True
+    cfg = {"smtp_password": "hunter2-real", "token_count": 5}
+    r = run(jr, api, from_backup=SRC, config=cfg)
+    with pytest.raises(RuntimeError):
+        r.wait()
+    assert jr.get("wf1")["wf"]["recipe"]["config"] == cfg  # stored un-redacted
+    api.fail_restore = False
+    run(jr, api, from_backup=SRC, config=cfg).wait()  # no ResumeRefused: recipe matches journaled one
+    assert jr.get("wf1")["state"] == SUCCEEDED
+    d = r.to_dict()
+    r3 = type(r).from_dict(d, journal=jr, pilot=StubPilot(), api=api)
+    assert r3.config["smtp_password"] == "hunter2-real"
