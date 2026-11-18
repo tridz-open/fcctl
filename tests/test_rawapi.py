@@ -4,7 +4,7 @@ from fcctl import policy as pol
 from fcctl.audit import AuditLog
 from fcctl.guard import Guard
 from fcctl.journal import Journal
-from fcctl.ops import ApprovalPending, ConfirmRequired, OpContext, PolicyDenied
+from fcctl.ops import ApprovalPending, OpContext, PolicyDenied
 from fcctl.rawapi import ScopeMismatch, call_raw, classify
 
 
@@ -34,13 +34,11 @@ def test_get_free_and_unaudited(tmp_path):
     assert c.audit.list() == [] and f.calls == [("GET", "/sites", None)]
 
 
-def test_post_needs_confirm(tmp_path):
+def test_unknown_post_needs_approval_not_confirm(tmp_path):
     c, f = mk(tmp_path)
-    with pytest.raises(ConfirmRequired):
-        call_raw(c, "pilot", "POST", "/sites", {"a": 1})
-    assert not f.calls
-    call_raw(c, "pilot", "POST", "/sites", {"a": 1}, confirm=True)
-    assert f.calls and c.audit.list()[-1]["outcome"] == "submitted"
+    with pytest.raises(ApprovalPending):
+        call_raw(c, "pilot", "POST", "/sites", {"a": 1}, confirm=True)
+    assert not f.calls and c.audit.list()[-1]["outcome"] == "approval_requested"
 
 
 def test_full_policy_post_free(tmp_path):
@@ -64,9 +62,15 @@ def test_guarded_flag(tmp_path):
         call_raw(c, "pilot", "POST", "/sites", {}, guarded=True)
 
 
-@pytest.mark.parametrize("p", ["read_only", "protected"])
-def test_unclassified_write_rejected(tmp_path, p):
-    c, f = mk(tmp_path, p)
+def test_unclassified_write_protected_needs_approval(tmp_path):
+    c, f = mk(tmp_path, "protected")
+    with pytest.raises(ApprovalPending):
+        call_raw(c, "pilot", "POST", "/sites", {}, confirm=True)
+    assert not f.calls
+
+
+def test_unclassified_write_rejected(tmp_path):
+    c, f = mk(tmp_path, "read_only")
     with pytest.raises(PolicyDenied):
         call_raw(c, "pilot", "POST", "/sites", {}, confirm=True)
     assert not f.calls and c.audit.list()[-1]["outcome"] == "denied"

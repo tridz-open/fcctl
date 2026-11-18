@@ -332,6 +332,8 @@ REGISTRY: dict[str, _Op] = {
     "app.remove": _Op(_pilot("remove_app", "apps"), "pilot"),
     "app.switch_branch": _Op(_pilot("switch_branch", "apps"), "pilot"),
     "task.cancel": _Op(_pilot("cancel_task", "taskops"), "pilot"),
+    # unclassified `fcctl api` writes: replayed verbatim (method, path, body) once approved
+    "api.raw": _Op(_central("replay_raw", "rawapi"), "central"),
 }
 _default: Guard | None = None
 

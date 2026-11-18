@@ -219,7 +219,12 @@ def register(sub, common):
     x = sub.add_parser("doctor", parents=[common], help="check config, session and policy"); x.add_argument("--api", action="store_true")
     x.add_argument("--fix", action="store_true", help="apply safe fixes (create key, tighten permissions)")
     x.set_defaults(func=doctor)
-    x = sub.add_parser("api", parents=[common], help="raw API call (classified, audited, guarded)")
+    x = sub.add_parser("api", parents=[common], help="raw API call (classified, audited, guarded)",
+                       description="Raw API call. GET/HEAD/OPTIONS run directly. Unclassified writes (POST/PUT/PATCH/DELETE) "
+                                   "under the guarded or protected policy are not executed: they file a pending approval "
+                                   "(exit 7). --yes/--confirm do not bypass this. A second person runs "
+                                   "`fcctl approval approve <id> --approver <name>` (token in FCCTL_APPROVAL_TOKEN) to execute "
+                                   "the identical request.")
     x.add_argument("plane", choices=["central", "pilot"]); x.add_argument("method")
     x.add_argument("path", help="central: dotted method; pilot: URL path")
     x.add_argument("--data", help="JSON body: @file reads it from a file, - reads stdin (keeps it out of ps/history); inline JSON works but warns"); x.add_argument("--guarded", action="store_true")

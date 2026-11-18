@@ -135,6 +135,15 @@ def resolve_policy(login: str, team: str, profiles: list[Profile]) -> EffectiveP
     return EffectivePolicy(login, team, policy, allow, tuple(warns), tuple(p.name for p in m))
 
 
+READ_METHODS = ("GET", "HEAD", "OPTIONS")
+
+# Allowlist of path regexes for known-safe, read-style non-GET raw calls (e.g. POST RPCs that only
+# read). Intentionally empty: every registry entry with a `path` regex is already classified by
+# classify_raw, and nothing else is known safe. Anything unclassified and non-read needs approval
+# under `guarded` and `protected` (`fcctl approval approve <id>`); `--yes`/`--confirm` never bypass it.
+SAFE_RAW_NON_GET: tuple[str, ...] = ()
+
+
 def classify_raw(method: str, path: str) -> dict | None:
     """Match a raw call to a registry entry that declares a `path` regex; else None (unclassified)."""
     method = method.upper()
@@ -165,12 +174,14 @@ def check(op, eff: EffectivePolicy, registry: dict | None = None) -> Decision:
             kind = None  # unclassified
     pol = eff.policy
     if kind is None:  # unclassified raw
-        if pol in ("read_only", "protected"):
+        if pol == "read_only" or (pol == "protected" and method in READ_METHODS):
             return Deny(f"unclassified raw operation {method} {path} rejected under {pol}")
         if method == "DELETE" or DESTRUCTIVE_RE.search(path):
             return NeedsApproval()
-        if method in ("POST", "PUT", "PATCH") and pol == "guarded":
-            return NeedsConfirm()
+        if pol in ("guarded", "protected") and method not in READ_METHODS:
+            if any(re.search(p, path) for p in SAFE_RAW_NON_GET):
+                return Allow()
+            return NeedsApproval()  # unknown write: fail closed to the two-person approval flow
         return Allow()
     is_write = kind in ("write", "cost", "disruptive", "destructive")
     if is_write:
