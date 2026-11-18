@@ -88,13 +88,9 @@ Optional extra: `.[yaml]` adds pyyaml for `-o yaml` output.
 
 ### 1. Create an encryption key
 
-fcctl encrypts your session (the dashboard `sid` cookie, the CSRF token and Pilot tokens) with a Fernet key, and uses the same key to sign its approval records. Generate it once and keep it somewhere safe, such as a password manager or the OS keychain:
+fcctl encrypts your session (the dashboard `sid` cookie, the CSRF token and Pilot tokens) with a Fernet key, and uses the same key to sign its approval records. Run `fcctl init` once: it generates the key and stores it in the OS keyring (install `fcctl[keyring]`) or, if that is unavailable, in a 0600 file `$FCCTL_HOME/session.key`. The key is never printed. `--store keyring|file` picks the location. You can still set `FCCTL_KEY` yourself; the environment wins, then the keyring, then the key file. `fcctl doctor` prints an exact fix per failed check and `fcctl doctor --fix` applies the safe ones.
 
-```bash
-export FCCTL_KEY=$(python3 -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())")
-```
-
-Every later command needs the same `FCCTL_KEY`. If you lose or change it, run `fcctl auth login` again.
+Every later command needs the same key. If you lose or change it, run `fcctl auth login` again.
 
 ### 2. Create a profile
 
@@ -287,7 +283,7 @@ For real separation of duties, use separate Frappe Cloud accounts with restricte
 
 | Variable | Purpose |
 |---|---|
-| `FCCTL_KEY` | **Required.** Fernet key that encrypts the session and signs approvals |
+| `FCCTL_KEY` | Optional override (else keyring, then `session.key`; run `fcctl init`). Fernet key that encrypts the session and signs approvals |
 | `FCCTL_HOME` | State directory (default `~/.fcctl`) |
 | `FCCTL_PROFILE` | Profile to use (overrides `profile use`) |
 | `FCCTL_EMAIL`, `FCCTL_TEAM`, `FCCTL_SERVER` | Defaults when there is no profile / no `-s` |

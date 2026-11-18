@@ -13,7 +13,8 @@ from typing import Any
 from cryptography.fernet import Fernet, InvalidToken
 
 from ._fs import open_private, private_dir
-from .errors import KEY_CMD, FcError
+from .errors import FcError
+from .keys import get_key
 
 DEFAULT_DIR = Path(os.environ.get("FCCTL_HOME", Path.home() / ".fcctl"))
 
@@ -28,12 +29,12 @@ class SessionStore:
                  profile_dir: Path | str | None = None):
         self.path = Path(path) if path else DEFAULT_DIR / "session.enc"
         self.profile_dir = Path(profile_dir) if profile_dir else DEFAULT_DIR / "profile"
-        key = key or os.environ.get("FCCTL_KEY")
+        key = key or get_key(home=self.path.parent)
         if not key:
             raise SessionStoreError(
                 "FCCTL_KEY is not set", what="FCCTL_KEY is not set",
-                why="the session file is encrypted and needs a Fernet key from the environment",
-                fix=f"Generate one with: {KEY_CMD}  then export FCCTL_KEY=<that value>")
+                why="the session file is encrypted and needs a Fernet key (env, OS keyring or key file)",
+                fix="run: fcctl init")
         self._key = key
         try:
             self._fernet = Fernet(key.encode() if isinstance(key, str) else key)
@@ -41,7 +42,7 @@ class SessionStore:
             raise SessionStoreError(
                 "FCCTL_KEY is malformed", what="FCCTL_KEY is not a valid Fernet key",
                 why="a Fernet key must be 32 url-safe base64-encoded bytes (44 characters)",
-                fix=f"Generate a valid one with: {KEY_CMD}  then export FCCTL_KEY=<that value>") from e
+                fix="Unset the bad FCCTL_KEY, or replace the stored key; then run: fcctl init") from e
         self.data: dict[str, Any] = self._read()
 
     # -- persistence

@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 
 GUIDE = """fcctl quick guide
+  0. fcctl init                (first run: creates the encryption key, never printed)
   1. fcctl profile create main --email you@example.com --team TEAM && fcctl profile use main
   2. fcctl auth login          (email code; --code-stdin for scripts)
   3. fcctl auth whoami
@@ -45,33 +47,94 @@ def alert_test(ctx, args):
     return Alerter(ctx.env).send("fcctl test alert", "This is a test alert from `fcctl alert test`.")
 
 
+def _state_paths(home):
+    """(path, wanted_mode) for private state that exists under FCCTL_HOME."""
+    out = []
+    if home.exists():
+        out.append((home, 0o700))
+        for d in ("audit", "journal", "profile"):
+            if (home / d).is_dir():
+                out.append((home / d, 0o700))
+        for pat in ("config.toml", "session*.enc", "session.key", "approvals.json", "audit.jsonl"):
+            out.extend((f, 0o600) for f in sorted(home.glob(pat)) if f.is_file())
+    return out
+
+
+def _loose(home):
+    import stat
+    bad = []
+    for p, want in _state_paths(home):
+        mode = stat.S_IMODE(p.stat().st_mode)
+        if mode & ~want & 0o777 & (0o077 if want == 0o600 else 0o077):
+            bad.append((p, want))
+    return bad
+
+
+def init(ctx, args):
+    from ..keys import init_key
+    status, where = init_key(ctx.env, ctx.home, args.store)
+    steps = ["fcctl profile create main --email you@example.com --team TEAM-xxxx", "fcctl profile use main",
+             "fcctl auth login"]
+    if status == "exists":
+        return {"status": "already initialised", "key": where, "home": str(ctx.home)}
+    return {"status": "initialised", "key": f"stored in {where}", "home": str(ctx.home), "next": steps}
+
+
 def doctor(ctx, args):
+    from ..keys import KeyFileInsecure, init_key, resolve_key
+    if args.fix:
+        fixed = []
+        try:
+            if resolve_key(ctx.env, ctx.home)[1] == "none":
+                init_key(ctx.env, ctx.home)
+                fixed.append("generated key")
+        except KeyFileInsecure:
+            pass
+        for p, want in _loose(ctx.home):
+            os.chmod(p, want)
+            fixed.append(f"chmod {want:o} {p}")
+        for f in fixed:
+            sys.stderr.write(f"fixed: {f}\n")
     checks = []
 
-    def add(name, ok, detail=""):
-        checks.append({"check": name, "ok": bool(ok), "detail": detail})
+    def add(name, ok, detail="", fix=""):
+        checks.append({"check": name, "ok": bool(ok), "detail": detail, "fix": "" if ok else fix})
     add("python", sys.version_info >= (3, 11), sys.version.split()[0])
-    add("FCCTL_KEY set", bool(ctx.env.get("FCCTL_KEY")), "needed for session + approvals encryption")
+    key, src, key_err = None, "none", ""
+    try:
+        key, src = resolve_key(ctx.env, ctx.home)
+    except Exception as e:
+        key_err = str(e)
+    if key_err:
+        add("encryption key", False, key_err, f"chmod 600 {ctx.home / 'session.key'}")
+    else:
+        add("encryption key", bool(key), f"from {src}" if key else "needed for session + approvals encryption",
+            "run fcctl init")
+    for p, want in _loose(ctx.home):
+        add("permissions", False, f"{p} is not private", f"chmod {want:o} {p}")
     try:
         profs = ctx.profiles.list()
         add("config", True, f"{len(profs)} profile(s) in {ctx.profiles.path}")
     except Exception as e:
         profs = []
-        add("config", False, str(e))
+        add("config", False, str(e), f"fix the TOML syntax in {ctx.profiles.path}")
     p = ctx.profile_or_none
-    add("profile selected", p is not None, p.name if p else "use --profile or `profile use`")
-    if p and ctx.env.get("FCCTL_KEY"):
+    add("profile selected", p is not None, p.name if p else "use --profile or `profile use`",
+        "fcctl profile create <name> --email you@example.com --team TEAM-xxxx" if not profs
+        else "fcctl profile use <name>")
+    if p and key:
         try:
-            add("session present", bool(ctx.store.sid), "run `fcctl auth login`" if not ctx.store.sid else "")
+            add("session present", bool(ctx.store.sid), "run `fcctl auth login`" if not ctx.store.sid else "",
+                "fcctl auth login")
         except Exception as e:
-            add("session present", False, str(e))
+            add("session present", False, str(e), "fcctl auth login")
     if args.api and p:
         try:
             from .. import auth
             r = auth.keepalive(ctx.central)
             add("api reachable", True, (r or {}).get("email", "") if isinstance(r, dict) else "")
         except Exception as e:
-            add("api reachable", False, str(e))
+            add("api reachable", False, str(e), "fcctl auth login")
     if not all(c["ok"] for c in checks):
         ctx.exit_code = 1
     return checks
@@ -150,7 +213,11 @@ def register(sub, common):
     x.set_defaults(func=watch)
     al = sub.add_parser("alert", parents=[common], help="alert channel tools").add_subparsers(dest="alert_cmd", required=True)
     al.add_parser("test", parents=[common], help="send a test alert").set_defaults(func=alert_test)
+    x = sub.add_parser("init", parents=[common], help="first-run setup: create the encryption key and config dir")
+    x.add_argument("--store", choices=["keyring", "file"], help="where to keep the key (default: keyring if available, else file)")
+    x.set_defaults(func=init)
     x = sub.add_parser("doctor", parents=[common], help="check config, session and policy"); x.add_argument("--api", action="store_true")
+    x.add_argument("--fix", action="store_true", help="apply safe fixes (create key, tighten permissions)")
     x.set_defaults(func=doctor)
     x = sub.add_parser("api", parents=[common], help="raw API call (classified, audited, guarded)")
     x.add_argument("plane", choices=["central", "pilot"]); x.add_argument("method")

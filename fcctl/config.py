@@ -251,11 +251,13 @@ def _keyring(profile: Profile | None) -> Credentials | None:
 
 
 def _encrypted(env: Mapping[str, str]) -> Credentials | None:
-    if not env.get("FCCTL_KEY"):
-        return None
     try:
+        from .keys import get_key
         from .session_store import SessionStore
-        s = SessionStore(path=home(env) / "session.enc", key=env["FCCTL_KEY"])
+        key = get_key(env, home(env))
+        if not key:
+            return None
+        s = SessionStore(path=home(env) / "session.enc", key=key)
     except Exception:
         return None
     return Credentials(None, s.sid, s.csrf, "encrypted_file") if s.sid else None

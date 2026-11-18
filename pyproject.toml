@@ -23,7 +23,8 @@ dependencies = ["httpx>=0.27", "cryptography>=42"]
 
 [project.optional-dependencies]
 yaml = ["pyyaml"]
-dev = ["pytest>=8", "respx", "pyyaml", "hypothesis", "unasync", "ruff"]
+keyring = ["keyring"]
+dev = ["pytest>=8", "respx", "pyyaml", "hypothesis", "unasync", "ruff", "keyring", "mypy", "pytest-cov"]
 
 [project.urls]
 Homepage = "https://github.com/tridz-open/fcctl"

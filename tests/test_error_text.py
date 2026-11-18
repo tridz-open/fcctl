@@ -50,7 +50,7 @@ def test_missing_key(tmp_path):
     with pytest.raises(SessionStoreError) as ei:
         SessionStore(path=tmp_path / "s.enc", key="")
     out = _check(ei.value)
-    assert "Fernet.generate_key" in out and "FCCTL_KEY" in out
+    assert "fcctl init" in out and "FCCTL_KEY" in out
 
 
 def test_malformed_key_not_echoed(tmp_path):
@@ -58,7 +58,7 @@ def test_malformed_key_not_echoed(tmp_path):
     with pytest.raises(SessionStoreError) as ei:
         SessionStore(path=tmp_path / "s.enc", key=bad)
     out = _check(ei.value, bad)
-    assert "Fernet.generate_key" in out and "ValueError" not in out
+    assert "fcctl init" in out and "ValueError" not in out
 
 
 def test_wrong_key(tmp_path):
@@ -100,7 +100,7 @@ def test_missing_credentials_and_env_file(tmp_path):
 def test_guard_missing_key(tmp_path):
     with pytest.raises(guard.GuardError) as ei:
         guard.Guard(home=tmp_path, key="", secret="")
-    assert "Fernet.generate_key" in _check(ei.value)
+    assert "fcctl init" in _check(ei.value)
 
 
 def test_exit_codes_unchanged():

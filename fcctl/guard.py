@@ -33,7 +33,6 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from urllib.parse import quote
 
-from .errors import KEY_CMD
 from ._fs import open_private, private_dir
 
 TTL = 30 * 60
@@ -120,10 +119,11 @@ class Guard:
     def __init__(self, home=None, key=None, secret=None, alerter=None, now=time.time, user=None):
         self.home = Path(home or os.environ.get("FCCTL_HOME") or Path.home() / ".fcctl")
         private_dir(self.home)
-        self.key = (key or os.environ.get("FCCTL_KEY") or "").encode()
+        from .keys import get_key
+        self.key = (key or get_key(home=self.home) or "").encode()
         if not self.key:
             raise GuardError("FCCTL_KEY is not set", why="the approvals store is HMAC-signed with FCCTL_KEY",
-                             fix=f"Generate a key with: {KEY_CMD}  then export FCCTL_KEY=<that value>")
+                             fix="run: fcctl init")
         self.secret = secret if secret is not None else os.environ.get("FCCTL_APPROVAL_SECRET", "")
         self.alerter, self.now = alerter, now
         self.user = user or os.environ.get("FCCTL_USER") or getpass.getuser()
