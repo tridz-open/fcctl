@@ -86,9 +86,18 @@ Optional extra: `.[yaml]` adds pyyaml for `-o yaml` output.
 
 ## First run
 
-### 1. Create an encryption key
+### 1. Initialise (`fcctl init`)
 
-fcctl encrypts your session (the dashboard `sid` cookie, the CSRF token and Pilot tokens) with a Fernet key, and uses the same key to sign its approval records. Run `fcctl init` once: it generates the key and stores it in the OS keyring (install `fcctl[keyring]`) or, if that is unavailable, in a 0600 file `$FCCTL_HOME/session.key`. The key is never printed. `--store keyring|file` picks the location. You can still set `FCCTL_KEY` yourself; the environment wins, then the keyring, then the key file. `fcctl doctor` prints an exact fix per failed check and `fcctl doctor --fix` applies the safe ones.
+fcctl encrypts your session (the dashboard `sid` cookie, the CSRF token and Pilot tokens) with a Fernet key, and uses the same key to sign its approval records. Run `fcctl init` once: it generates the key and stores it in the OS keyring or, if that is unavailable, in a 0600 file `$FCCTL_HOME/session.key`. The key is never printed. `--store keyring|file` picks the location. The keyring needs an optional extra:
+
+```bash
+pip install 'fcctl[keyring]'      # optional; without it `fcctl init` uses the 0600 key file
+fcctl init
+fcctl doctor                      # prints an exact fix for each failed check
+fcctl doctor --fix                # applies the safe fixes (creates the key, tightens permissions)
+```
+
+Alternative: set `FCCTL_KEY` yourself in the environment (a Fernet key; for CI or containers where there is no keyring or persistent home). The lookup order is the environment, then the keyring, then the key file.
 
 Every later command needs the same key. If you lose or change it, run `fcctl auth login` again.
 
@@ -227,11 +236,53 @@ fcctl audit verify                    # check the local audit chain
 fcctl auth logout                     # ends the server session too
 ```
 
+**Raw API calls.** `fcctl api` sends any request. Pass the body from a file or stdin so it stays out of `ps` and shell history; inline `--data '{...}'` works but prints a warning:
+
+```bash
+fcctl api pilot GET /api/method/ping
+fcctl api central POST press.api.site.new --data @body.json --dry-run
+cat body.json | fcctl api central POST press.api.site.new --data -
+```
+
+Reads (GET/HEAD/OPTIONS) run directly. Under the `guarded` and `protected` policies, a write that fcctl does not recognise (an unknown `api` POST/PUT/PATCH/DELETE) is not executed: it files a pending approval and exits 7, and `--yes` or `--confirm` do not bypass that.
+
+**Dry run.** `--dry-run` on any write prints the decision and the HTTP requests it would send (method, path, body with secrets redacted), and sends nothing.
+
+**Retries.** Idempotent requests (GET, HEAD, OPTIONS) are retried on 429, 5xx and network errors with exponential backoff and jitter, honouring `Retry-After`. The default is 3 retries; set `--max-retries N` or `FCCTL_MAX_RETRIES=N` (0 disables). Writes are never retried automatically: an interrupted write is settled by `fcctl reconcile`.
+
+**Shell completion** (bash, zsh, fish):
+
+```bash
+eval "$(fcctl completion bash)"                          # in ~/.bashrc
+fcctl completion zsh > ~/.zfunc/_fcctl                   # then: autoload -U compinit && compinit
+fcctl completion fish > ~/.config/fish/completions/fcctl.fish
+```
+
+**Command reference.** Every command and flag is listed in [docs/COMMANDS.md](docs/COMMANDS.md). It is generated from the parser; regenerate it with `python scripts/gen_commands.py`.
+
 Global flags: `--profile`, `-s/--server`, `-o table|json|yaml|ndjson` (json when stdout is not a terminal), `--wait/--no-wait`, `--timeout`, `--dry-run`, `--confirm`, `--yes`, `--no-progress`, `--debug`. Data goes to stdout; progress and errors go to stderr. Run `fcctl <group> --help` for any group.
 
 Command groups: `auth profile server snapshot bucket billing notification app site backup task logs fleet approval audit reconcile watch alert doctor api guide completion version`.
 
-Exit codes: 0 ok, 2 usage, 3 auth, 4 policy/permission, 5 not found, 6 conflict, 7 approval pending, 8 wait timeout (the remote operation keeps running), 9 task failed, 10 Cloudflare challenge, 11 rate limited, 12 validation, 13 outcome unknown, 130 interrupted.
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | ok |
+| 1 | API error, API drift, or any other failure |
+| 2 | usage error |
+| 3 | auth: session or CSRF token missing, expired or rejected |
+| 4 | policy denied, outside the profile's scope, or feature disabled |
+| 5 | not found |
+| 6 | conflict: another task is running on the resource, or the name exists |
+| 7 | approval pending |
+| 8 | wait timeout (the remote operation keeps running) |
+| 9 | task failed |
+| 10 | Cloudflare challenge |
+| 11 | rate limited or quota exceeded |
+| 12 | validation error (including a refused disk shrink) |
+| 13 | outcome unknown (the connection broke after the request was sent) |
+| 130 | interrupted |
 
 ## Experimental commands
 
@@ -263,6 +314,7 @@ Every write passes through the safety layer before any API call:
    - `read_only`: allows no writes.
    - `protected`: allows no writes, except operations in the profile's `allow` list.
 2. **Approval.** Destructive operations do not run straight away. These include `site drop`, `backup restore`, `server terminate` and `snapshot delete`. The command files a signed approval and exits with code 7. Someone then runs `fcctl approval approve ID --approver NAME` with the approval token, taken from `FCCTL_APPROVAL_TOKEN` or an interactive prompt (never from the command line). The token is the approval secret itself or a 6-digit RFC 6238 TOTP code; `fcctl approval enroll` generates a base32 secret plus an `otpauth://` URI, so a normal authenticator app works. The approver name must differ from the requester name, but names are not authenticated, so on one machine a requester can approve their own request by supplying another name. Treat this as a speed bump against accidents and agents, not separation of duties.
+   - **Signed approvals (optional).** Set `FCCTL_APPROVER_KEY` to a secret held only by the approver and the executing side, and approvals are signed with it; `fcctl approval approve ... --require-signed` (or `FCCTL_REQUIRE_SIGNED_APPROVAL=1`) rejects any approval without a valid signature. This gives real separation only when the requester never holds that key. Without it, single-machine self-approval is a speed bump, not separation of duties.
    - **Gated operations** under `guarded`:
      - Pilot: `site drop`, `site uninstall_app`, `backup restore`, `app remove`, `app switch_branch`, `task cancel`.
      - Central: `server terminate`, `stop` and `resize`; turning termination protection off; `snapshot delete`; `bucket delete`.
@@ -289,7 +341,12 @@ For real separation of duties, use separate Frappe Cloud accounts with restricte
 | `FCCTL_EMAIL`, `FCCTL_TEAM`, `FCCTL_SERVER` | Defaults when there is no profile / no `-s` |
 | `FCCTL_IMAP_HOST`, `FCCTL_IMAP_USER`, `FCCTL_IMAP_PASS` | IMAP auto-login (`--code-source imap`) |
 | `FCCTL_APPROVAL_SECRET` | Base32 approver secret for guarded operations (`fcctl approval enroll` generates one) |
+| `FCCTL_APPROVER_KEY` | Optional approver signing key, distinct from `FCCTL_KEY` and `FCCTL_APPROVAL_SECRET`; approvals then carry a signature (see Safety model) |
+| `FCCTL_REQUIRE_SIGNED_APPROVAL` | `1` rejects approvals without a valid approver signature (same as `--require-signed`) |
+| `FCCTL_MAX_RETRIES` | Retries for idempotent requests (default 3; 0 disables; same as `--max-retries`) |
 | `FCCTL_APPROVAL_TOKEN` | Approval token or authenticator code (otherwise `approve` prompts for it) |
+| `FCCTL_REGION` | Default region for server and bucket creation (default `bom`) |
+| `FCCTL_ENV_FILE`, `FCCTL_SID`, `FCCTL_LOGIN`, `FCCTL_CSRF`, `FCCTL_OWNER_ID` | Non-interactive session and automation-profile inputs (CI and services) |
 | `FCCTL_USER` | Requester identity recorded on approvals (default: OS user) |
 | `FCCTL_SMTP_HOST/PORT/USER/PASS`, `FCCTL_ALERT_FROM`, `FCCTL_ALERT_TO` | Email alerts |
 | `FCCTL_TG_TOKEN`, `FCCTL_TG_CHAT` | Telegram alerts |
@@ -333,6 +390,25 @@ Notes:
 To test your own code, `fcctl.testing.FakeFrappeCloud` provides an in-process fake of Central and Pilot.
 
 How it fits together, with diagrams (request path, safety layer, auth flow, provisioning states, cross-server restore): [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Guard limits for library users
+
+The safety layer is enforced in two places only: the CLI and the `Client` facade. Anything below the facade does not check policy.
+
+| Call | Guard |
+|---|---|
+| CLI commands (`fcctl site drop`, `backup restore`, ...) | Enforced: policy, approval, audit, journal |
+| `Client.sites.drop`, `Client.backups.restore` | Guarded by default: return `PendingApproval` instead of acting |
+| `owned_by_workflow=<workflow id>` on those calls | Exempt, but only if the journal shows that workflow created the site; otherwise `PolicyDenied` |
+| `unsafe=True` on those calls | Opt-out with no guard and no ownership check; an audit entry is written first and the call fails if it cannot be written |
+| `Servers.resize` | Not approval-gated (the CLI's `--confirm` has no library equivalent); it refuses a disk shrink |
+| `Workflows.provision_site` | Unguarded; it only restores onto a site the workflow itself creates |
+| Other facade reads and writes | Not gated |
+| `client.pilot(server).post(...)`, `client.central.call(...)` | Not enforced: raw transport |
+| `fcctl.sites.*`, `fcctl.servers.*` and other top-level module functions | Not enforced for direct calls: low-level helpers |
+| `fcctl api ...` (raw) | Reads run directly; unknown writes need approval under `guarded` or `protected`, but a `full` profile allows them |
+
+If your code needs the guard, call the facade and do not reach for the low-level clients.
 
 ## How it is used in production
 
