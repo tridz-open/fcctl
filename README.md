@@ -52,18 +52,18 @@ fcctl is built by Tridz Technologies, a team that builds on Frappe Cloud. We wro
 
 ## Install
 
-fcctl is not on PyPI. Install it from a release tag and pin that tag. Tags are listed on the [releases page](https://github.com/tridz-open/fcctl/tags); replace `v0.1.0-alpha.3` below with the tag you want.
+fcctl is not on PyPI. Install it from a release tag and pin that tag. Tags are listed on the [releases page](https://github.com/tridz-open/fcctl/tags); replace `v0.1.0-alpha.4` below with the tag you want.
 
 ```bash
 # uv (recommended): puts `fcctl` on your PATH
-uv tool install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.3"
+uv tool install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.4"
 
 # or pipx
-pipx install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.3"
+pipx install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.4"
 
 # or pip, inside a virtualenv
 python3 -m venv .venv && . .venv/bin/activate
-pip install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.3"
+pip install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.4"
 ```
 
 From a local clone (this is also how to develop on it):
@@ -341,7 +341,6 @@ For real separation of duties, use separate Frappe Cloud accounts with restricte
 | `FCCTL_EMAIL`, `FCCTL_TEAM`, `FCCTL_SERVER` | Defaults when there is no profile / no `-s` |
 | `FCCTL_IMAP_HOST`, `FCCTL_IMAP_USER`, `FCCTL_IMAP_PASS` | IMAP auto-login (`--code-source imap`) |
 | `FCCTL_APPROVAL_SECRET` | Base32 approver secret for guarded operations (`fcctl approval enroll` generates one) |
-| `FCCTL_APPROVER_KEY` | Optional approver signing key, distinct from `FCCTL_KEY` and `FCCTL_APPROVAL_SECRET`; approvals then carry a signature (see Safety model) |
 | `FCCTL_REQUIRE_SIGNED_APPROVAL` | `1` rejects approvals without a valid approver signature (same as `--require-signed`) |
 | `FCCTL_APPROVER_PRIVATE_KEY`, `FCCTL_APPROVER_PRIVATE_KEY_FILE` | Approver's Ed25519 private key (base64) or the file holding it; approver side only |
 | `FCCTL_APPROVAL_SIGNATURE` | Signature from `fcctl approval sign`, used by `approve` |
@@ -436,6 +435,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). Endpoin
 ## Related repositories
 
 - [tridz-open/frappe-saaskit-sdk](https://github.com/tridz-open/frappe-saaskit-sdk): `@frappe-saaskit` TypeScript SDK (client, React, Vue, Node, mock) for apps that talk to a `saas_core` backend.
+- [tridz-open/saas_core](https://github.com/tridz-open/saas_core): the public Frappe app that uses fcctl to provision customer sites; it pins a fcctl release.
 - [tridz-open/frappe-saaskit-starter](https://github.com/tridz-open/frappe-saaskit-starter): React + Vite SaaS starter for Frappe (`saas_core`).
 
 ## Contributing, security and license
