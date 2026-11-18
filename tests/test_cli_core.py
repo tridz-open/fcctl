@@ -142,7 +142,7 @@ def test_misc_version_guide_completion_alert_doctor(env, capsys):
     assert "fcctl" in json.loads(run(capsys, "version")[1])
     assert "fcctl quick guide" in run(capsys, "guide")[1]
     out = run(capsys, "completion", "bash")[1]
-    assert "complete -W" in out and "profile" in out and "doctor" in out
+    assert "complete -F _fcctl fcctl" in out and "profile" in out and "doctor" in out
     assert "#compdef" in run(capsys, "completion", "zsh")[1]
     assert run(capsys, "alert", "test")[0] == 0
     rc, out, _ = run(capsys, "doctor")

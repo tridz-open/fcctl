@@ -185,19 +185,9 @@ def guide(ctx, args):
     return 0
 
 
-def _commands(parser):
-    for a in parser._actions:
-        if hasattr(a, "choices") and isinstance(getattr(a, "choices", None), dict) and a.dest == "cmd":
-            return sorted(a.choices)
-    return []
-
-
 def completion(ctx, args):
-    cmds = " ".join(_commands(ctx.parser))
-    if args.shell == "zsh":
-        sys.stdout.write(f"#compdef fcctl\n_arguments '1:command:({cmds})'\n")
-    else:
-        sys.stdout.write(f'complete -W "{cmds}" fcctl\n')
+    from .completion import generate
+    sys.stdout.write(generate(args.shell, ctx.parser))
     return 0
 
 
@@ -236,8 +226,10 @@ def register(sub, common):
     x.add_argument("--data", help="JSON body: @file reads it from a file, - reads stdin (keeps it out of ps/history); inline JSON works but warns"); x.add_argument("--guarded", action="store_true")
     x.set_defaults(func=api)
     add_cmd(sub, common, "guide", "print the built-in usage guide", "fcctl guide").set_defaults(func=guide)
-    x = add_cmd(sub, common, "completion", "print a bash or zsh completion script", "fcctl completion zsh")
-    x.add_argument("shell", choices=["bash", "zsh"])
+    x = add_cmd(sub, common, "completion", "print a bash, zsh or fish completion script",
+                ["fcctl completion bash", "fcctl completion zsh", "fcctl completion fish"])
+    x.epilog = x.epilog.replace("\n\nGlobal", '\n\nInstall:\n  eval "$(fcctl completion bash)"   # in ~/.bashrc\n  $ fcctl completion zsh > ~/.zfunc/_fcctl\n  $ fcctl completion fish > ~/.config/fish/completions/fcctl.fish\n\nGlobal', 1)
+    x.add_argument("shell", choices=["bash", "zsh", "fish"])
     x.set_defaults(func=completion)
     add_cmd(sub, common, "version", "print fcctl and Python versions", "fcctl version").set_defaults(func=version)
 
