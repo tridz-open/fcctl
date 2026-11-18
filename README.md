@@ -311,6 +311,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) and [CHANGELOG.md](CHANGELOG.md). Endpoin
 - CSRF refresh falls back to reading the dashboard boot page, which is fragile.
 - The API has no in-place snapshot restore.
 - No MCP server yet.
+- Live-verified on Frappe Cloud (Pilot): site create, rename, drop (through the approval gate), app install / `app add --site`, config, logs, backup create/list/schedule, cross-site backup upload, task output, and the full provision workflow from a golden backup (hooks, release, health).
+- Not yet live-tested: bench-only `app add`, `app add --repo`, `app check-updates`, `app remove`, a full `backup restore`, and all server, snapshot, bucket and billing (Central) writes. Treat these as experimental.
 
 ## Deprecated: browser fallback (will be removed)
 
