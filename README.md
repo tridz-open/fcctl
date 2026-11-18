@@ -24,7 +24,7 @@ Read this before using fcctl.
 
 - **Not affiliated with or endorsed by Frappe Technologies.** "Frappe" and "Frappe Cloud" are their trademarks.
 - **fcctl uses the private dashboard API.** fcctl calls the same HTTP endpoints the Frappe Cloud web dashboard calls, signed in with your own account. Frappe has not documented or published these endpoints as a public API. They can change or disappear without notice, and any fcctl command can break when they do. Pin a version, and test against a non-production team first.
-- **Some request bodies are unverified.** Many endpoints were mapped by reading the open-source code rather than by calling them live; `docs/API_IA.md` marks which are verified (V/R) and which are source-only (S/W). Treat every write you have not tried yourself as experimental.
+- **Some request bodies are unverified.** Many endpoints were mapped by reading the open-source code rather than by calling them live; `docs/API_IA.md` separates what is verified live, what is implemented but unverified, and what is not implemented. Treat every write you have not tried yourself as experimental.
 - **Your Frappe Cloud terms still apply.** You are responsible for using fcctl within them. Automated sign-in (the IMAP option below) and automation in general may be restricted. If you plan to run fcctl unattended or at volume, ask Frappe first. fcctl never solves CAPTCHAs or Cloudflare challenges: when one appears, it stops with exit code 10.
 - **The safety layer guards against mistakes, not attackers.** Anyone who holds your session can call the API directly and bypass every fcctl check. For the full model, see [Safety model](#safety-model).
 - **The interfaces may change.** The CLI, the library and the on-disk formats can change between 0.x releases.
