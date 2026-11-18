@@ -297,3 +297,13 @@ def test_live_api_site_config_reads_configuration_endpoint():
             return {"maintenance_mode": 1, "pause_scheduler": 1}
     cfg = LiveApi(P(), None).site_config("a.example.com")
     assert P.path == "/sites/a.example.com/configuration" and cfg["maintenance_mode"] == 1
+
+
+def test_set_host_name_defaults_to_site_url():
+    """Templates call core.set_host_name with no args; it must default to https://<site>."""
+    class P:
+        def __init__(self): self.c = []
+        def patch(self, path, body): self.c.append(body)
+    p = P()
+    builtin_resolver().resolve("core.set_host_name@1")(StepContext("s.com", p, wait_task=lambda t: None))
+    assert p.c == [{"host_name": "https://s.com"}]
