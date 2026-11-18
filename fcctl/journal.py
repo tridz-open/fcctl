@@ -13,7 +13,7 @@ import uuid
 from pathlib import Path
 
 from ._fs import open_private, private_dir
-from .redact import redact
+from .redact import redact, redact_text
 
 PENDING, DISPATCHING, SUBMITTED, RUNNING = "pending", "dispatching", "submitted", "running"
 SUCCEEDED, FAILED, UNKNOWN, STUCK, NEEDS_ATTENTION = (
@@ -112,6 +112,8 @@ class Journal:
         if state not in TRANSITIONS.get(e["state"], set()):
             raise InvalidTransition(f"{e['state']} -> {state} not allowed for {jid}")
         t = self.now()
+        if isinstance(fields.get("error"), str):
+            fields["error"] = redact_text(fields["error"])  # display text only; other state stays raw
         e.update(fields)
         e["state"], e["updated_at"] = state, t
         e["history"].append([state, t])

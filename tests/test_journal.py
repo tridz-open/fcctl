@@ -232,3 +232,12 @@ def test_rendering_journal_masks_secrets(jr):
     out = J.render_entry(jr.get(e["id"]))
     assert out["args"]["smtp_password"] == "[REDACTED]" and out["args"]["token_count"] == 3
     assert "hunter2" not in json.dumps(out)
+
+
+def test_journal_error_redacted_on_write_state_raw(jr):
+    e = jr.create("x", {"password": "RAWPW123456"})
+    jr.transition(e["id"], "dispatching")
+    jr.transition(e["id"], "outcome_unknown", error="boom password=LEAKEDPW99 Authorization: Bearer abc.def")
+    raw = (jr.dir / f"{e['id']}.json").read_text()
+    assert "LEAKEDPW99" not in raw and "abc.def" not in raw
+    assert json.loads(raw)["args"]["password"] == "RAWPW123456"

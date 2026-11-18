@@ -182,3 +182,15 @@ def test_api_central_read_and_policy(env, fake, capsys):
     assert rc == 4 and out == "" and "error:" in err
     rc, out, _ = run(capsys, "api", "central", "POST", "central.api.servers.create_server", "--dry-run")
     assert rc == 0
+
+
+def test_approval_list_show_redact_args_but_store_raw(env, capsys, monkeypatch):
+    import os
+    from fcctl.guard import Guard
+    monkeypatch.setenv("FCCTL_APPROVAL_TOKEN", "s3cret")
+    g = Guard(home=env / "home", key=os.environ["FCCTL_KEY"], secret="s3cret", user="bob")
+    rec = g.request("site.drop", "a.b", {"admin_password": "PLANTEDPW123", "name": "ok"})
+    for argv in (("approval", "list"), ("approval", "show", rec.id)):
+        out = run(capsys, *argv)[1]
+        assert "PLANTEDPW123" not in out and "ok" in out
+    assert g._load()[rec.id].args["admin_password"] == "PLANTEDPW123"

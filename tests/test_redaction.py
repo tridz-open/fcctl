@@ -148,3 +148,9 @@ def test_secret_key_regex_positives(k):
 def test_secret_key_regex_negatives(k):
     from fcctl.redact import SECRET_KEY_RE
     assert not SECRET_KEY_RE.search(k), k
+
+
+def test_access_key_ssh_key_redacted_token_count_kept():
+    out = redact({"access_key": "AKIAXYZ", "ssh_key": "ssh-rsa AAA", "aws_access_key": "x", "token_count": 5})
+    assert out["access_key"] == out["ssh_key"] == out["aws_access_key"] == "[REDACTED]"
+    assert out["token_count"] == 5
