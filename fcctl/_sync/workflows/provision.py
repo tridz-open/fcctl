@@ -149,7 +149,10 @@ class ProvisionRun:
         self.min_vcpu, self.allow_existing_sites = min_vcpu, allow_existing_sites
         self.allow_hook_upgrade, self.pilot_factory = allow_hook_upgrade, pilot_factory
         self.server, self.bench_apps, self.site_apps = server, list(bench_apps), list(site_apps)
-        self.from_backup, self.hooks, self.config = from_backup, list(post_restore_hooks), dict(config or {})
+        # Hooks may arrive as HookRef or as plain {name, version, args} dicts (e.g. from a stored template).
+        self.from_backup, self.hooks, self.config = (
+            from_backup, [h if isinstance(h, HookRef) else HookRef.from_dict(h) for h in post_restore_hooks],
+            dict(config or {}))
         self.resolver = hook_resolver
         self._builtin = builtin_resolver()
         self.recipe = recipe or self._recipe()
