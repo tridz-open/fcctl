@@ -36,7 +36,7 @@ Scope rule. Ids are arguments, never global state: the team is a client default,
 | Backup create, list, schedule | `backup create`, `backup list` | Pilot | `GET/POST /sites/<n>/backups`, `GET/PUT /sites/<n>/backup-schedule` |
 | Cross-site backup transfer (upload) | used by `site provision` | Pilot | `POST /sites/<n>/actions/restore-upload` and the upload routes |
 | Tasks: status, events, output | `task list/get/wait/attach/output` | Pilot | `GET /tasks[/<id>]`, `/tasks/<id>/events`, `/output/content` |
-| Provision workflow from a golden backup (hooks, release order, health) | `site provision` | Pilot | composed from the calls above |
+| Provision workflow from a template site's backup (hooks, release order, health) | `site provision` | Pilot | composed from the calls above |
 
 ## 2. Implemented, not verified live
 

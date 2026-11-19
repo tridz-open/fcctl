@@ -4,6 +4,9 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Changed
+- Docs: the prepared site whose backup seeds new tenant sites is now called a template site (was "golden backup").
+
 ## [0.1.0a4] - 2026-11-18
 
 ### Added
