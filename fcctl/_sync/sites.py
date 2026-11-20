@@ -26,7 +26,7 @@ def create_site(p: PilotClient, name: str, apps: list[str], key: str | None = No
 
 
 def clone_site(p: PilotClient, source: str, name: str, target_bench: str = "default-bench", key=None):
-    """Golden-source clone; body keys name, target_bench."""
+    """Clone from a template site; body keys name, target_bench."""
     return p.post(f"/sites/{seg(source)}/actions/clone", {"name": name, "target_bench": target_bench}, key=key)
 
 

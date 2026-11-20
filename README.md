@@ -221,7 +221,7 @@ See [Safety model](#safety-model) for how approval tokens work.
 fcctl site provision acme.example.com -s server-xxxx --app erpnext --app hrms --dry-run
 fcctl site provision acme.example.com -s server-xxxx --app erpnext --app hrms
 
-# From a golden backup of another site (profile:site:timestamp), with a config value:
+# From a template site's backup (profile:site:timestamp), with a config value:
 fcctl site provision acme.example.com -s server-xxxx --app erpnext \
   --from-backup me:template.example.com:TIMESTAMP --config KEY=VALUE
 ```
@@ -302,7 +302,7 @@ These are implemented and covered by offline tests (respx and the in-process fak
 | `bucket create / quota / delete / put` | Central writes, not live-tested |
 | `billing health` | computed from field names that are not live-verified (billing has no write commands) |
 
-Live-verified on Frappe Cloud (Pilot): site create, rename, drop (through the approval gate), app install and `app add --site`, config, logs, backup create/list/schedule, cross-site backup upload, task output, and the full provision workflow from a golden backup (hooks, release, health). The endpoint catalogue in [docs/API_IA.md](docs/API_IA.md) separates verified, unverified and not-implemented calls.
+Live-verified on Frappe Cloud (Pilot): site create, rename, drop (through the approval gate), app install and `app add --site`, config, logs, backup create/list/schedule, cross-site backup upload, task output, and the full provision workflow from a template site's backup (hooks, release, health). The endpoint catalogue in [docs/API_IA.md](docs/API_IA.md) separates verified, unverified and not-implemented calls.
 
 Region for server and bucket creation defaults to `bom`; set `FCCTL_REGION` (for example `blr`) or pass `--region` to change it.
 
@@ -417,7 +417,7 @@ If your code needs the guard, call the facade and do not reach for the low-level
 
 ## How it is used in production
 
-fcctl powers a SaaS control plane (`saas_core`, a Frappe app) that provisions customer sites on Frappe Cloud from a golden backup: it creates the site, restores the template, runs setup hooks, lifts maintenance mode and checks health, with destructive steps held behind approval. fcctl itself is product-neutral, so any Frappe SaaS can use it the same way.
+fcctl powers a SaaS control plane (`saas_core`, a Frappe app) that provisions customer sites on Frappe Cloud from a template site's backup: it creates the site, restores the template, runs setup hooks, lifts maintenance mode and checks health, with destructive steps held behind approval. fcctl itself is product-neutral, so any Frappe SaaS can use it the same way.
 
 ## Development
 
