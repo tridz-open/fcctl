@@ -54,18 +54,18 @@ fcctl is built by Tridz Technologies, a team that builds on Frappe Cloud. We wro
 
 ## Install
 
-fcctl is not on PyPI. Install it from a release tag and pin that tag. Tags are listed on the [releases page](https://github.com/tridz-open/fcctl/tags); replace `v0.1.0-alpha.4` below with the tag you want.
+fcctl is not on PyPI. Install it from a release tag and pin that tag. Tags are listed on the [releases page](https://github.com/tridz-open/fcctl/tags); replace `v0.1.0-alpha.5` below with the tag you want.
 
 ```bash
 # uv (recommended): puts `fcctl` on your PATH
-uv tool install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.4"
+uv tool install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.5"
 
 # or pipx
-pipx install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.4"
+pipx install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.5"
 
 # or pip, inside a virtualenv
 python3 -m venv .venv && . .venv/bin/activate
-pip install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.4"
+pip install "git+https://github.com/tridz-open/fcctl@v0.1.0-alpha.5"
 ```
 
 From a local clone (this is also how to develop on it):
@@ -79,7 +79,7 @@ uv tool install .
 Check the install:
 
 ```bash
-fcctl --version      # prints the installed version, e.g. fcctl 0.1.0a4
+fcctl --version      # prints the installed version, e.g. fcctl 0.1.0a5
 fcctl --help
 fcctl guide          # built-in usage guide
 ```
