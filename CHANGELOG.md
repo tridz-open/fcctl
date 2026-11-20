@@ -4,6 +4,9 @@ All notable changes to this project are documented here. Format: [Keep a Changel
 
 ## [Unreleased]
 
+### Fixed
+- `servers.resize`: the disk-shrink pre-check now reads plans the way the FC dashboard does (`catalog.get_eligible_plans` with `cluster`, `exclude_subscription`, `for_resize=1`) instead of the image catalog, which failed every resize with "Image Offering  not found"; it fails open with a warning if the plans cannot be read.
+
 ## [0.1.0a5] - 2026-11-20
 
 ### Changed

@@ -33,24 +33,40 @@ from ..region import default_region
 from .pilot import seg
 
 import os
+import warnings
 from typing import Any
 from pathlib import Path
 
 from ..facade_types import BackupSource
-from ..errors import DiskShrinkRefused, PolicyDenied, UsageError
+from ..errors import DiskShrinkRefused, FcError, PolicyDenied, UsageError
 from . import siteadmin as _siteadmin
 
 M = "central.api.servers."
+CATALOG = "central.billing.api.dashboard.catalog."
 RESTORE_PARTS = ("database", "public", "private", "config")
 
 
 def _disk(d) -> float | None:
+    """Disk GB from a server overview, composed config or catalog plan row (None when unknown)."""
     if not isinstance(d, dict):
         return None
-    for v in (d.get("disk"), (d.get("plan") or {}).get("disk") if isinstance(d.get("plan"), dict) else None):
-        if isinstance(v, (int, float)):
+    plan: dict = d["plan"] if isinstance(d.get("plan"), dict) else {}
+    for v in (d.get("disk_gigabytes"), d.get("disk_gb"), d.get("disk"), plan.get("disk")):
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
             return float(v)
+    for inc in d.get("includes") or []:
+        if isinstance(inc, dict) and inc.get("resource_type") == "Disk" and isinstance(inc.get("quantity"), (int, float)):
+            return float(inc["quantity"])
     return None
+
+
+def _plan_rows(plans) -> list:
+    """Flatten get_eligible_plans' {"plans": {sub_category: [rows]}} (or a bare list) into rows."""
+    if isinstance(plans, dict):
+        plans = plans.get("plans") or []
+    if isinstance(plans, dict):
+        return [r for rows in plans.values() if isinstance(rows, list) for r in rows]
+    return list(plans) if isinstance(plans, list) else []
 
 
 def _journal():
@@ -128,17 +144,50 @@ class Servers:
         self._c = client
 
     def resize(self, server: str, plan: str, **extra):
-        """POST resize_server; refuses a disk shrink (DiskShrinkRefused) when both disks are known."""
+        """POST resize_server; refuses a disk shrink (DiskShrinkRefused) when both disks are known.
+
+        The pre-check mirrors the FC dashboard's resize dialog: the server overview gives the region and
+        disk, get_composed_config gives the subscription, and the billing catalog's get_eligible_plans
+        (cluster + exclude_subscription + for_resize=1) gives the target plan's Disk allowance. An explicit
+        disk_gigabytes in `extra` is the disk the resize asks for. If the plan data cannot be read the
+        check fails open with a warning; Central itself still refuses a smaller disk.
+        """
         c = self._c.central
-        cur = _disk(c.call("GET", M + "server_overview", params={"resource_id": server}))
-        plans = c.call("GET", "central.api.images.eligible_plans", params={"region": default_region()})
-        if isinstance(plans, dict):
-            plans = plans.get("plans") or []
-        new = next((_disk(p) for p in plans or [] if isinstance(p, dict) and plan in (p.get("name"), p.get("plan"))),
-                   None)
+        overview = c.call("GET", M + "server_overview", params={"resource_id": server})
+        if isinstance(overview, dict) and isinstance(overview.get("server"), dict):
+            overview = overview["server"]  # Central wraps the row: {"server": {...}}
+        cur = _disk(overview)
+        new = extra.get("disk_gigabytes")
+        new = float(new) if isinstance(new, (int, float)) and not isinstance(new, bool) else None
+        if new is None or cur is None:
+            try:
+                plan_disk, cfg_disk = self._plan_disk(server, plan, overview)
+                new = plan_disk if new is None else new
+                cur = cfg_disk if cur is None else cur
+            except FcError as e:
+                warnings.warn(f"fcctl: disk-shrink pre-check skipped for {server} ({e}); resizing anyway",
+                              RuntimeWarning, stacklevel=2)
+            else:
+                if cur is None or new is None:
+                    warnings.warn(f"fcctl: disk-shrink pre-check skipped for {server}: "
+                                  f"{'current disk' if cur is None else 'plan ' + plan + ' disk'} unknown; resizing anyway",
+                                  RuntimeWarning, stacklevel=2)
         if cur is not None and new is not None and new < cur:
             raise DiskShrinkRefused(f"plan {plan} disk {new:g}GB < current {cur:g}GB; disk shrink is not allowed")
         return c.call("POST", M + "resize_server", json={"resource_id": server, "plan": plan, **extra})
+
+    def _plan_disk(self, server: str, plan: str, overview) -> tuple[float | None, float | None]:
+        """(target plan's Disk GB, current disk GB from get_composed_config)."""
+        c = self._c.central
+        region = (overview.get("region") if isinstance(overview, dict) else None) or default_region()
+        cfg = c.call("GET", CATALOG + "get_composed_config", params={"server": server})
+        sub = cfg.get("subscription") if isinstance(cfg, dict) else None
+        params: dict[str, Any] = {"cluster": region}
+        if sub:
+            params.update(exclude_subscription=sub, for_resize=1)
+        rows = _plan_rows(c.call("GET", CATALOG + "get_eligible_plans", params=params))
+        new = next((_disk(p) for p in rows if isinstance(p, dict) and plan in (p.get("plan"), p.get("name"))), None)
+        return new, _disk(cfg)
 
 
 class Backups:

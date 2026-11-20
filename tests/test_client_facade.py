@@ -84,6 +84,78 @@ def test_resize_ok_and_shrink_refused(cl):
     assert e.value.exit_code == 12
 
 
+def _resize_client(kind, seen, overview, plans, cfg=None, plans_status=200):
+    """Client whose transport mimics the real Central resize pre-check endpoints."""
+    def h(req: httpx.Request):
+        p = req.url.path
+        seen.append((req.method, p.rsplit(".", 1)[-1], dict(req.url.params),
+                     json.loads(req.content) if req.content else None))
+        if p.endswith("server_overview"):
+            return httpx.Response(200, json={"message": overview})
+        if p.endswith("get_composed_config"):
+            return httpx.Response(200, json={"message": cfg if cfg is not None else {"resizable": True}})
+        if p.endswith("get_eligible_plans"):
+            if plans_status != 200:
+                return httpx.Response(plans_status, json={"exc_type": "ValidationError",
+                                                          "_server_messages": "[]", "message": "boom"})
+            return httpx.Response(200, json={"message": plans})
+        if p.endswith("resize_server"):
+            return httpx.Response(200, json={"message": {"ok": 1}})
+        return httpx.Response(404, json={})
+    t = httpx.MockTransport(h) if kind == "sync" else None
+    if kind == "sync":
+        return Client(Store(), "T", http=httpx.Client(transport=t))
+    return AsyncClient(Store(), "T", http=httpx.AsyncClient(transport=httpx.MockTransport(h)))
+
+
+CATALOG = {"plans": {"General": [
+    {"plan": "s-2", "includes": [{"resource_type": "Disk", "quantity": 25, "unit": "GB"}]},
+    {"plan": "s-8", "includes": [{"resource_type": "Disk", "quantity": 160, "unit": "GB"}]}]}}
+
+
+@pytest.mark.parametrize("kind", ["sync", "async"])
+def test_resize_precheck_uses_billing_catalog_like_dashboard(kind):
+    seen = []
+    c = _resize_client(kind, seen, {"server": {"region": "blr", "disk_gigabytes": 80}}, CATALOG,
+                       cfg={"resizable": True, "subscription": "SUB-1", "disk_gb": 80})
+    assert call(c, c.servers.resize, "srv", "s-8") == {"ok": 1}
+    q = next(params for m, fn, params, b in seen if fn == "get_eligible_plans")
+    assert q == {"cluster": "blr", "exclude_subscription": "SUB-1", "for_resize": "1", "team": "T"}
+    assert not any(fn == "eligible_plans" for m, fn, params, b in seen)  # never the image (create) catalog
+    with pytest.raises(DiskShrinkRefused):
+        call(c, c.servers.resize, "srv", "s-2")
+    assert sum(fn == "resize_server" for m, fn, params, b in seen) == 1
+
+
+@pytest.mark.parametrize("kind", ["sync", "async"])
+def test_resize_current_disk_from_composed_config(kind):
+    seen = []
+    c = _resize_client(kind, seen, {"server": {"region": "blr"}}, CATALOG,
+                       cfg={"subscription": "SUB-1", "disk_gb": 50})
+    with pytest.raises(DiskShrinkRefused):
+        call(c, c.servers.resize, "srv", "s-2")
+    assert call(c, c.servers.resize, "srv", "s-8") == {"ok": 1}
+
+
+@pytest.mark.parametrize("kind", ["sync", "async"])
+def test_resize_explicit_disk_keeps_disk_and_blocks_shrink(kind):
+    seen = []
+    c = _resize_client(kind, seen, {"region": "blr", "disk_gigabytes": 80}, CATALOG)
+    assert call(c, c.servers.resize, "srv", "s-2", disk_gigabytes=80) == {"ok": 1}
+    assert not any(fn == "get_eligible_plans" for m, fn, params, b in seen)
+    with pytest.raises(DiskShrinkRefused):
+        call(c, c.servers.resize, "srv", "s-8", disk_gigabytes=40)
+
+
+@pytest.mark.parametrize("kind", ["sync", "async"])
+def test_resize_precheck_fails_open_with_warning(kind):
+    seen = []
+    c = _resize_client(kind, seen, {"region": "blr", "disk_gigabytes": 80}, CATALOG, plans_status=417)
+    with pytest.warns(RuntimeWarning, match="pre-check skipped"):
+        assert call(c, c.servers.resize, "srv", "s-2") == {"ok": 1}
+    assert seen[-1][1] == "resize_server"
+
+
 def test_download_links(cl):
     c, st = cl
     call(c, c.backups.download_links, "srv", "a.test", "20260101_000000")
